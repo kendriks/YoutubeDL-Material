@@ -213,7 +213,7 @@ export class SettingsComponent implements OnInit {
   // not currently functioning on most platforms. hence not in use
   bookmarksite(title: string, url: string): void {
     // Internet Explorer
-    if (document.all) {
+    if (window['external'] && typeof window['external']['AddFavorite'] === 'function') {
         window['external']['AddFavorite'](url, title);
     } else if (window['chrome']) {
         // Google Chrome
