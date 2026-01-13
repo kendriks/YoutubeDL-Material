@@ -164,7 +164,7 @@ export class MainComponent implements OnInit {
   selectedQuality: string | unknown = '';
   formats_loading = false;
 
-  @ViewChild('urlinput', { read: ElementRef }) urlInput: ElementRef;
+  //@ViewChild('urlinput', { read: ElementRef }) urlInput: ElementRef;
   @ViewChild('recentVideos') recentVideos: RecentVideosComponent;
   last_valid_url = '';
   last_url_check = 0;
@@ -621,13 +621,13 @@ export class MainComponent implements OnInit {
   }
 
   attachToInput(): void {
-    Observable.fromEvent(this.urlInput.nativeElement, 'keyup')
-      .map((e: any) => e.target.value)           // extract the value of input
-      .filter((text: string) => text.length > 1) // filter out if empty
-      .debounceTime(250)                         // only once every 250ms
-      .do(() => this.results_loading = true)         // enable loading
-      .map((query: string) => this.youtubeSearch.search(query))
-      .switch()                                  // act on the return of the search
+    this.urlForm.valueChanges
+      .pipe(
+        filter((text: string) => !!text && text.length > 1),
+        debounceTime(250),
+        tap(() => this.results_loading = true),
+        switchMap((query: string) => this.youtubeSearch.search(query))
+      )
       .subscribe(
         (results: Result[]) => {
           this.results_loading = false;
@@ -638,16 +638,13 @@ export class MainComponent implements OnInit {
             this.results_showing = false;
           }
         },
-        (err: any) => {
-          console.log(err)
+        () => {
           this.results_loading = false;
           this.results_showing = false;
-        },
-        () => { // on completion
-          this.results_loading = false;
         }
       );
   }
+
 
   argsChanged(): void {
     this.argsChangedSubject.next(true);
