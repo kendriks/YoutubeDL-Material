@@ -1,4 +1,4 @@
-import { Component, OnInit, EventEmitter } from '@angular/core';
+import { Component, OnInit, EventEmitter, Renderer2 } from '@angularcore';
 import { PostsService } from 'app/posts.services';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {DomSanitizer} from '@angular/platform-browser';
@@ -54,7 +54,7 @@ export class SettingsComponent implements OnInit {
   }
 
   constructor(public postsService: PostsService, private snackBar: MatSnackBar, private sanitizer: DomSanitizer,
-    private dialog: MatDialog, private router: Router, private route: ActivatedRoute) {
+    private dialog: MatDialog, private router: Router, private route: ActivatedRoute, private renderer: Renderer2) {
       // invert index to tab
       Object.keys(this.INDEX_TO_TAB).forEach(key => { this.TAB_TO_INDEX[this.INDEX_TO_TAB[key]] = key; });
     }
@@ -223,10 +223,10 @@ export class SettingsComponent implements OnInit {
         window['sidebar'].addPanel(title, url, '');
     } else if (window['opera'] && window.print) {
         // Opera
-       const elem = document.createElement('a');
-       elem.setAttribute('href', url);
-       elem.setAttribute('title', title);
-       elem.setAttribute('rel', 'sidebar');
+       const elem = this.renderer.createElement('a');
+       this.renderer.setAttribute(elem, 'href', url);
+       this.renderer.setAttribute(elem, 'title', title);
+       this.renderer.setAttribute(elem, 'rel', 'sidebar');
        elem.click();
     }
  }
