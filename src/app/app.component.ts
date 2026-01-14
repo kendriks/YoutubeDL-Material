@@ -1,4 +1,4 @@
-import { Component, OnInit, ElementRef, ViewChild, HostBinding, AfterViewInit } from '@angular/core';
+import { Component, OnInit, ElementRef, ViewChild, HostBinding, AfterViewInit, Renderer2 } from '@angular/core';
 import {MatDialogRef} from '@angular/material/dialog';
 import {PostsService} from './posts.services';
 import { MatDialog } from '@angular/material/dialog';
@@ -54,7 +54,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   notification_count = 0;
 
   constructor(public postsService: PostsService, public snackBar: MatSnackBar, private dialog: MatDialog,
-    public router: Router, public overlayContainer: OverlayContainer, private elementRef: ElementRef) {
+    public router: Router, public overlayContainer: OverlayContainer, private elementRef: ElementRef, private renderer: Renderer2) {
 
     this.navigator = localStorage.getItem('player_navigator');
     // runs on navigate, captures the route that navigated to the player (if needed)
@@ -63,7 +63,7 @@ export class AppComponent implements OnInit, AfterViewInit {
     } else if (e instanceof NavigationEnd) {
       // blurs hamburger menu if it exists, as the sidenav likes to focus on it after closing
       if (this.hamburgerMenuButton && this.hamburgerMenuButton.nativeElement) {
-        this.hamburgerMenuButton.nativeElement.blur();
+        this.renderer.invokeElementMethod(this.hamburgerMenuButton.nativeElement, 'blur');
       }
     }
     });
