@@ -71,7 +71,7 @@ export class MainComponent implements OnInit {
   replaceArgs = false;
   customOutput: string | null = null;
   youtubeAuthEnabled = false;
-  youtubeUsername = null;
+  youtubeUsername: string | null = null;
   youtubePassword = null;
   cropFile = false;
   cropFileStart = null;
