@@ -72,7 +72,7 @@ export class MainComponent implements OnInit {
   customOutput: string | null = null;
   youtubeAuthEnabled = false;
   youtubeUsername: string | null = null;
-  youtubePassword = null;
+  youtubePassword: string | null = null;
   cropFile = false;
   cropFileStart = null;
   cropFileEnd = null;
