@@ -13,6 +13,7 @@ import { RecentVideosComponent } from 'app/components/recent-videos/recent-video
 import { DatabaseFile, Download, FileType, Playlist } from 'api-types';
 import { DOCUMENT } from '@angular/common';
 import { Inject } from '@angular/core';
+import { interval, Subscription } from 'rxjava';
 
 
 @Component({
@@ -47,6 +48,8 @@ export class MainComponent implements OnInit {
   exists = '';
   percentDownloaded: number;
   autoStartDownload = false;
+  downloadIntervalSub: Subscription;
+
 
   // global settings
   fileManagerEnabled = false;
@@ -57,6 +60,8 @@ export class MainComponent implements OnInit {
   allowAdvancedDownload = false;
   useDefaultDownloadingAgent = true;
   customDownloadingAgent = null;
+
+
 
   // cache
   cachedAvailableFormats = {};
@@ -172,7 +177,7 @@ export class MainComponent implements OnInit {
   argsChangedSubject: Subject<boolean> = new Subject<boolean>();
   simulatedOutput = '';
 
-  interval_id = null;
+//  interval_id = null;
 
   constructor(
     public postsService: PostsService,
@@ -246,12 +251,16 @@ export class MainComponent implements OnInit {
     }
 
     // get downloads routine
-    if (this.interval_id) { clearInterval(this.interval_id) }
-    this.interval_id = setInterval(() => {
+    if (this.downloadIntervalSub) {
+      this.downloadIntervalSub.unsubscribe();
+    }
+
+    this.downloadIntervalSub = interval(1000).subscribe(() => {
       if (this.current_download) {
         this.getCurrentDownload();
       }
-    }, 1000);
+    });
+
 
     return true;
   }
@@ -309,9 +318,12 @@ export class MainComponent implements OnInit {
     }
   }
 
-  ngOnDestroy(): void {
-    if (this.interval_id) { clearInterval(this.interval_id) }
-  }
+ ngOnDestroy(): void {
+   if (this.downloadIntervalSub) {
+     this.downloadIntervalSub.unsubscribe();
+   }
+ }
+
 
   // download helpers
   downloadHelper(container: DatabaseFile | Playlist, type: string, is_playlist = false, force_view = false, navigate_mode = false): void {
