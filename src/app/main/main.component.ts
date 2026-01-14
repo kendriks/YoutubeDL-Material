@@ -203,7 +203,7 @@ export class MainComponent implements OnInit {
   }
 
   selectedMaxQuality = '';
-  selectedQuality: string | unknown = '';
+  selectedQuality: string | null = null;
   formats_loading = false;
 
   //@ViewChild('urlinput', { read: ElementRef }) urlInput: ElementRef;
