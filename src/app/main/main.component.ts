@@ -14,6 +14,7 @@ import { DatabaseFile, Download, FileType, Playlist } from 'api-types';
 import { DOCUMENT } from '@angular/common';
 import { Inject } from '@angular/core';
 import { interval, Subscription } from 'rxjava';
+import { TimeService } from 'app/core/time.service';
 
 
 @Component({
@@ -188,6 +189,7 @@ export class MainComponent implements OnInit {
     private platform: Platform,
     private route: ActivatedRoute,
     @Inject(DOCUMENT) private document: Document
+    private timeService: TimeService
   ) {
     this.audioOnly = false;
   }
@@ -549,14 +551,15 @@ export class MainComponent implements OnInit {
     const youtubeStrRegex = /(?:http(?:s)?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:(?:watch)?\?(?:.*&)?v(?:i)?=|(?:embed|v|vi|user)\/))([^\?&\"'<> #]+)/;
     const reYT = new RegExp(youtubeStrRegex);
     const ytValid = true || reYT.test(str);
-    if (valid && ytValid && Date.now() - this.last_url_check > 1000) {
+    if (valid && ytValid && this.timeService.now() - this.last_url_check > 1000) {
       if (str !== this.last_valid_url && this.allowQualitySelect) {
-        // get info
         this.getURLInfo(str);
         this.argsChanged();
       }
       this.last_valid_url = str;
+      this.last_url_check = this.timeService.now();
     }
+
     return valid;
   }
 
