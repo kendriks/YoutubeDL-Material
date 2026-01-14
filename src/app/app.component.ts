@@ -165,7 +165,7 @@ export class AppComponent implements OnInit, AfterViewInit {
       this.renderer.removeClass(this.document.body, old_theme);
       this.renderer.removeClass(this.overlayContainer.getContainerElement(), old_theme);
     }
-    this.overlayContainer.getContainerElement().classList.add(theme);
+    this.renderer.addClass(this.overlayContainer.getContainerElement(), theme);
     this.componentCssClass = theme;
   }
 
