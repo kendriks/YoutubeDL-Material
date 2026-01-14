@@ -224,7 +224,7 @@ export class MainComponent implements OnInit {
     public dialog: MatDialog,
     private platform: Platform,
     private route: ActivatedRoute,
-    @Inject(DOCUMENT) private document: Document
+    @Inject(DOCUMENT) private document: Document,
     private timeService: TimeService
   ) {
     this.audioOnly = false;
