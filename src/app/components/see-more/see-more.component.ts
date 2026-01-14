@@ -55,8 +55,9 @@ export class SeeMoreComponent implements OnInit {
     this.see_more_active = !this.see_more_active;
   }
 
-  parseText() {
-    return this.text.replace(/(http.*?\s)/, "<a href=\"$1\">$1</a>")
+  parseText(): string {
+    return this.text.replace(/(http.*?\s)/, '<a href="$1">$1</a>');
   }
+
 
 }
