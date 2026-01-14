@@ -22,6 +22,39 @@ import { TimeService } from 'app/core/time.service';
   templateUrl: './main.component.html',
   styleUrls: ['./main.component.css']
 })
+
+export interface AvailableFormat {
+  formats?: ParsedFormats;
+  formats_loading?: boolean;
+  formats_failed?: boolean;
+}
+
+export interface ParsedFormats {
+  best_audio_format?: string;
+  video?: VideoFormat[];
+  audio?: AudioFormat[];
+}
+
+export interface VideoFormat {
+  key: string;
+  height: number;
+  fps: number;
+  acodec?: string;
+  format_id: string;
+  label: string;
+  expected_filesize?: number;
+}
+
+export interface AudioFormat {
+  key: string;
+  bitrate: number;
+  format_id: string;
+  ext: string;
+  label: string;
+  expected_filesize?: number;
+}
+
+
 export class MainComponent implements OnInit {
   youtubeAuthDisabledOverride = false;
 
@@ -65,7 +98,7 @@ export class MainComponent implements OnInit {
 
 
   // cache
-  cachedAvailableFormats = {};
+  cachedAvailableFormats: Record<string, AvailableFormat> = {};
   cachedFileManagerEnabled = localStorage.getItem('cached_filemanager_enabled') === 'true';
 
   // youtube api
@@ -82,6 +115,8 @@ export class MainComponent implements OnInit {
   current_download: Download = null;
 
   urlForm = new UntypedFormControl('', [Validators.required]);
+
+
 
   qualityOptions = {
     'video': [
@@ -864,3 +899,4 @@ export class MainComponent implements OnInit {
     return bytes.toFixed(dp) + ' ' + units[u];
   }
 }
+
