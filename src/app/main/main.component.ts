@@ -66,7 +66,7 @@ export class MainComponent implements OnInit {
   audioOnly: boolean;
   autoplay = false;
   customArgsEnabled = false;
-  customArgs = null;
+  customArgs: string | null = null;
   customOutputEnabled = false;
   replaceArgs = false;
   customOutput = null;
