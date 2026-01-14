@@ -57,7 +57,9 @@ export class OnlyNumberDirective {
     const pastedInput: string = event.clipboardData
       .getData('text/plain')
       .replace(/\D/g, ''); // get a digit-only string
-    document.execCommand('insertText', false, pastedInput);
+    const input = this.inputElement as HTMLInputElement;
+    input.value = pastedInput;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   @HostListener('drop', ['$event'])
@@ -65,7 +67,9 @@ export class OnlyNumberDirective {
     event.preventDefault();
     const textData = event.dataTransfer.getData('text').replace(/\D/g, '');
     this.inputElement.focus();
-    document.execCommand('insertText', false, textData);
+    const input = this.inputElement as HTMLInputElement;
+    input.value = textData;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
 
