@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, NgZone, OnDestroy, OnInit, QueryList, Renderer2, ViewChild, ViewChildren } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, OnInit, QueryList, Renderer2, ViewChild, ViewChildren } from '@angular/core';
 import { DatabaseFile } from 'api-types';
 import { PostsService } from 'app/posts.services';
 
@@ -28,7 +28,7 @@ export class TwitchChatComponent implements OnInit, OnDestroy {
   @ViewChild('scrollContainer', { static: false }) scrollRef: ElementRef;
   @ViewChildren('chat') chat: QueryList<any>;
 
-  constructor(private postsService: PostsService, private renderer: Renderer2, private ngZone: NgZone) { }
+  constructor(private postsService: PostsService, private renderer: Renderer2) { }
 
   ngOnInit(): void {
     this.getFullChat();
@@ -38,27 +38,10 @@ export class TwitchChatComponent implements OnInit, OnDestroy {
     if (this.chat_check_interval_obj) { clearInterval(this.chat_check_interval_obj); }
   }
 
-  private getScrollMetrics(): { scrollTop: number; offsetHeight: number; scrollHeight: number } | null {
-    if (!this.scrollContainer) {
-      return null;
-    }
-    return {
-      scrollTop: this.scrollContainer.scrollTop,
-      offsetHeight: this.scrollContainer.offsetHeight,
-      scrollHeight: this.scrollContainer.scrollHeight
-    };
-  }
-
   private isUserNearBottom(): boolean {
     const threshold = 150;
-    const metrics = this.getScrollMetrics();
-    
-    if (!metrics) {
-      return false;
-    }
-    
-    const position = metrics.scrollTop + metrics.offsetHeight;
-    const height = metrics.scrollHeight;
+    const position = this.scrollContainer.scrollTop + this.scrollContainer.offsetHeight;
+    const height = this.scrollContainer.scrollHeight;
     return position > height - threshold;
   }
 
