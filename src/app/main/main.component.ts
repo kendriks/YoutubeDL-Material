@@ -106,7 +106,8 @@ export class MainComponent implements OnInit {
   youtubeAPIKey = null;
   results_loading = false;
   results_showing = true;
-  results = [];
+  results: Result[] = [];
+
 
   playlists = {'audio': [], 'video': []};
   playlist_thumbnails = {};
