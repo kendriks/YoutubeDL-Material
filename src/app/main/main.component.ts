@@ -69,7 +69,7 @@ export class MainComponent implements OnInit {
   customArgs: string | null = null;
   customOutputEnabled = false;
   replaceArgs = false;
-  customOutput = null;
+  customOutput: string | null = null;
   youtubeAuthEnabled = false;
   youtubeUsername = null;
   youtubePassword = null;
