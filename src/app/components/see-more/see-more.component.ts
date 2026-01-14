@@ -1,12 +1,14 @@
 import { Component, Input, OnInit, Pipe, PipeTransform } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
 
 @Pipe({ name: 'linkify' })
 export class LinkifyPipe implements PipeTransform {
 
   constructor(private _domSanitizer: DomSanitizer) {}
 
-  transform(value: any, args?: any): any {
+  transform(value: string): SafeHtml {
     return this._domSanitizer.bypassSecurityTrustHtml(this.stylize(value));
   }
 
@@ -16,7 +18,7 @@ export class LinkifyPipe implements PipeTransform {
     if (text && text.length > 0) {
       for (let line of text.split("\n")) {
         for (let t of line.split(" ")) {
-          if (t.startsWith("http") && t.length>7) {  
+          if (t.startsWith("http") && t.length>7) {
             stylizedText += `<a target="_blank" href="${t}">${t}</a> `;
           }
           else
