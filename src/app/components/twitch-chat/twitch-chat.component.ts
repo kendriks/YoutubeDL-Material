@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
+import { Component, ElementRef, Input, NgZone, OnDestroy, OnInit, QueryList, Renderer2, ViewChild, ViewChildren } from '@angular/core';
 import { DatabaseFile } from 'api-types';
 import { PostsService } from 'app/posts.services';
 
@@ -19,16 +19,16 @@ export class TwitchChatComponent implements OnInit, OnDestroy {
   CHAT_CHECK_INTERVAL_MS = 200;
   chat_check_interval_obj = null;
 
-  scrollContainer = null;
+  scrollContainer: HTMLElement = null;
 
   @Input() db_file: DatabaseFile = null;
   @Input() sub = null;
   @Input() current_timestamp = null;
 
-  @ViewChild('scrollContainer') scrollRef: ElementRef;
+  @ViewChild('scrollContainer', { static: false }) scrollRef: ElementRef;
   @ViewChildren('chat') chat: QueryList<any>;
 
-  constructor(private postsService: PostsService) { }
+  constructor(private postsService: PostsService, private renderer: Renderer2, private ngZone: NgZone) { }
 
   ngOnInit(): void {
     this.getFullChat();
@@ -38,22 +38,39 @@ export class TwitchChatComponent implements OnInit, OnDestroy {
     if (this.chat_check_interval_obj) { clearInterval(this.chat_check_interval_obj); }
   }
 
+  private getScrollMetrics(): { scrollTop: number; offsetHeight: number; scrollHeight: number } | null {
+    if (!this.scrollContainer) {
+      return null;
+    }
+    return {
+      scrollTop: this.scrollContainer.scrollTop,
+      offsetHeight: this.scrollContainer.offsetHeight,
+      scrollHeight: this.scrollContainer.scrollHeight
+    };
+  }
+
   private isUserNearBottom(): boolean {
     const threshold = 150;
-    const position = this.scrollContainer.scrollTop + this.scrollContainer.offsetHeight;
-    const height = this.scrollContainer.scrollHeight;
+    const metrics = this.getScrollMetrics();
+    
+    if (!metrics) {
+      return false;
+    }
+    
+    const position = metrics.scrollTop + metrics.offsetHeight;
+    const height = metrics.scrollHeight;
     return position > height - threshold;
   }
 
   scrollToBottom = (force_scroll = false) => {
     if (force_scroll || this.isUserNearBottom()) {
-      this.scrollContainer.scrollTop = this.scrollContainer.scrollHeight;
+      this.renderer.setProperty(this.scrollContainer, 'scrollTop', this.scrollContainer.scrollHeight);
     }
   }
 
   addNewChatMessages() {
     const next_chat_index = this.getIndexOfNextChat();
-    if (!this.scrollContainer) {
+    if (!this.scrollContainer && this.scrollRef) {
       this.scrollContainer = this.scrollRef.nativeElement;
     }
     if (this.current_chat_index === null) {
