@@ -1,5 +1,5 @@
-import { Component, OnInit, ElementRef, ViewChild, HostBinding, AfterViewInit, Renderer2 } from '@angular/core';
-import {MatDialogRef} from '@angular/material/dialog';
+import { Component, OnInit, ElementRef, ViewChild, HostBinding, AfterViewInit, Renderer2, Inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import {PostsService} from './posts.services';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSidenav } from '@angular/material/sidenav';
@@ -54,7 +54,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   notification_count = 0;
 
   constructor(public postsService: PostsService, public snackBar: MatSnackBar, private dialog: MatDialog,
-    public router: Router, public overlayContainer: OverlayContainer, private elementRef: ElementRef, private renderer: Renderer2) {
+    public router: Router, public overlayContainer: OverlayContainer, private elementRef: ElementRef, private renderer: Renderer2, @Inject(DOCUMENT) private document: Document) {
 
     this.navigator = localStorage.getItem('player_navigator');
     // runs on navigate, captures the route that navigated to the player (if needed)
@@ -149,7 +149,7 @@ export class AppComponent implements OnInit, AfterViewInit {
           }
         }
         localStorage.setItem('theme', theme);
-        this.elementRef.nativeElement.ownerDocument.body.style.backgroundColor = this.THEMES_CONFIG[theme]['background_color'];
+        this.renderer.setStyle(this.document.body, 'backgroundColor', this.THEMES_CONFIG[theme]['background_color']);
     } else {
         console.error('Invalid theme: ' + theme);
         return;
