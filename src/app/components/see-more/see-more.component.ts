@@ -51,9 +51,10 @@ export class SeeMoreComponent implements OnInit {
   ngOnInit(): void {
   }
 
-  toggleSeeMore() {
+  toggleSeeMore(): void {
     this.see_more_active = !this.see_more_active;
   }
+
 
   parseText(): string {
     return this.text.replace(/(http.*?\s)/, '<a href="$1">$1</a>');
