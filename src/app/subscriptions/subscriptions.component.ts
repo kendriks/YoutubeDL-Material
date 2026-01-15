@@ -1,11 +1,9 @@
-import { Component, OnInit, EventEmitter } from '@angular/core';
-import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { SubscribeDialogComponent } from 'app/dialogs/subscribe-dialog/subscribe-dialog.component';
-import { PostsService } from 'app/posts.services';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { SubscriptionInfoDialogComponent } from 'app/dialogs/subscription-info-dialog/subscription-info-dialog.component';
-import { EditSubscriptionDialogComponent } from 'app/dialogs/edit-subscription-dialog/edit-subscription-dialog.component';
+import { PostsService } from 'app/posts.services';
+import { SubscriptionDataService, SubscriptionData } from 'app/services/subscription-data.service';
+import { SubscriptionDialogManagerService } from 'app/services/subscription-dialog-manager.service';
+import { SubscriptionNotificationService } from 'app/services/subscription-notification.service';
 
 @Component({
   selector: 'app-subscriptions',
@@ -13,112 +11,75 @@ import { EditSubscriptionDialogComponent } from 'app/dialogs/edit-subscription-d
   styleUrls: ['./subscriptions.component.scss']
 })
 export class SubscriptionsComponent implements OnInit {
-
-  playlist_subscriptions = [];
-  channel_subscriptions = [];
-  subscriptions = null;
-
+  channel_subscriptions: SubscriptionData[] = [];
+  playlist_subscriptions: SubscriptionData[] = [];
+  subscriptions: SubscriptionData[] | null = null;
   subscriptions_loading = false;
 
-  constructor(private dialog: MatDialog, public postsService: PostsService, private router: Router, private snackBar: MatSnackBar) { }
+  constructor(
+    private postsService: PostsService,
+    private router: Router,
+    private subDataService: SubscriptionDataService,
+    private subDialogService: SubscriptionDialogManagerService,
+    private notificationService: SubscriptionNotificationService
+  ) { }
 
-  ngOnInit() {
-    if (this.postsService.initialized) {
-      this.getSubscriptions();
-    }
-    this.postsService.service_initialized.subscribe(init => {
-      if (init) {
-        this.getSubscriptions();
-      }
-    });
+  ngOnInit(): void {
+    const init = () => this.getSubscriptions();
+    this.postsService.initialized ? init() : this.postsService.service_initialized.subscribe(isInit => isInit && init());
   }
 
-  getSubscriptions(show_loading = true) {
+  getSubscriptions(show_loading = true): void {
     if (show_loading) this.subscriptions_loading = true;
     this.subscriptions = null;
-    this.postsService.getAllSubscriptions().subscribe(res => {
-      this.channel_subscriptions = [];
-      this.playlist_subscriptions = [];
-      this.subscriptions_loading = false;
-      this.subscriptions = res['subscriptions'];
-      if (!this.subscriptions) {
-        // set it to an empty array so it can notify the user there are no subscriptions
-        this.subscriptions = [];
-        return;
-      }
-
-      for (let i = 0; i < this.subscriptions.length; i++) {
-        const sub = this.subscriptions[i];
-
-        // parse subscriptions into channels and playlists
-        if (sub.isPlaylist) {
-          this.playlist_subscriptions.push(sub);
-        } else {
-          this.channel_subscriptions.push(sub);
-        }
-      }
-    }, err => {
-      this.subscriptions_loading = false;
-      console.error('Failed to get subscriptions');
-      this.openSnackBar('ERROR: Failed to get subscriptions!', 'OK.');
-    });
+    this.subDataService.getAllSubscriptions().subscribe(
+      res => this.onSubscriptionsLoaded(res.subscriptions),
+      err => this.onSubscriptionsError(err)
+    );
   }
 
-  goToSubscription(sub) {
-    this.router.navigate(['/subscription', {id: sub.id}]);
+  private onSubscriptionsLoaded(subscriptions: SubscriptionData[]): void {
+    this.subscriptions_loading = false;
+    this.subscriptions = subscriptions || [];
+    const cat = this.subDataService.categorizeSubscriptions(this.subscriptions);
+    this.channel_subscriptions = cat.channels;
+    this.playlist_subscriptions = cat.playlists;
   }
 
-  openSubscribeDialog() {
-    const dialogRef = this.dialog.open(SubscribeDialogComponent, {
-      maxWidth: 500,
-      width: '80vw'
-    });
+  private onSubscriptionsError(err: unknown): void {
+    this.subscriptions_loading = false;
+    this.notificationService.showErrorMessage('ERROR: Failed to get subscriptions!');
+  }
 
-    dialogRef.afterClosed().subscribe(result => {
+  goToSubscription(sub: SubscriptionData): void {
+    this.router.navigate(['/subscription', { id: sub.id }]);
+  }
+
+  openSubscribeDialog(): void {
+    this.subDialogService.openSubscribeDialog().subscribe(result => {
       if (result) {
-        if (result.isPlaylist) {
-          this.playlist_subscriptions.push(result);
-        } else {
-          this.channel_subscriptions.push(result);
-        }
-        this.postsService.reloadSubscriptions();
+        this.addToList(result);
+        this.subDataService.reloadSubscriptions();
       }
     });
   }
 
-  showSubInfo(sub) {
-    const unsubbedEmitter = new EventEmitter<any>();
-    const dialogRef = this.dialog.open(SubscriptionInfoDialogComponent, {
-      data: {
-        sub: sub,
-        unsubbedEmitter: unsubbedEmitter
-      }
-    });
-    unsubbedEmitter.subscribe(success => {
+  private addToList(sub: SubscriptionData): void {
+    (sub.isPlaylist ? this.playlist_subscriptions : this.channel_subscriptions).push(sub);
+  }
+
+  showSubInfo(sub: SubscriptionData): void {
+    this.subDialogService.openSubInfoDialog(sub).subscribe(success => {
       if (success) {
-        this.openSnackBar(`${sub.name} successfully deleted!`)
+        this.notificationService.showDeleteConfirmation(sub.name);
         this.getSubscriptions();
-        this.postsService.reloadSubscriptions();
-      }
-    })
-  }
-
-  editSubscription(sub) {
-    const dialogRef = this.dialog.open(EditSubscriptionDialogComponent, {
-      data: {
-        sub: this.postsService.getSubscriptionByID(sub.id)
+        this.subDataService.reloadSubscriptions();
       }
     });
-    dialogRef.afterClosed().subscribe(() => {
-      this.getSubscriptions(false);
-    });
   }
 
-  // snackbar helper
-  public openSnackBar(message: string, action = '') {
-    this.snackBar.open(message, action, {
-      duration: 2000,
-    });
+  editSubscription(sub: SubscriptionData): void {
+    this.subDialogService.openEditSubscriptionDialog(this.subDataService.getSubscriptionByID(sub.id))
+      .afterClosed().subscribe(() => this.getSubscriptions(false));
   }
-
 }
