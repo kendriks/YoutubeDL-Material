@@ -1,230 +1,89 @@
-import { Component, OnInit, ElementRef, ViewChild, HostBinding, AfterViewInit, Renderer2, Inject } from '@angular/core';
-import { DOCUMENT } from '@angular/common';
-import {PostsService} from './posts.services';
-import { MatDialog } from '@angular/material/dialog';
+import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core';
+import { PostsService } from './posts.services';
 import { MatSidenav } from '@angular/material/sidenav';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { saveAs } from 'file-saver';
-import 'rxjs/add/observable/of';
-import 'rxjs/add/operator/mapTo';
-import 'rxjs/add/operator/toPromise';
-import 'rxjs/add/observable/fromEvent'
-import 'rxjs/add/operator/filter'
-import 'rxjs/add/operator/debounceTime'
-import 'rxjs/add/operator/do'
-import 'rxjs/add/operator/switch'
-import { Router, NavigationStart, NavigationEnd } from '@angular/router';
-import { OverlayContainer } from '@angular/cdk/overlay';
-import { THEMES_CONFIG } from '../themes';
-import { SettingsComponent } from './settings/settings.component';
-import { AboutDialogComponent } from './dialogs/about-dialog/about-dialog.component';
-import { UserProfileDialogComponent } from './dialogs/user-profile-dialog/user-profile-dialog.component';
-import { SetDefaultAdminDialogComponent } from './dialogs/set-default-admin-dialog/set-default-admin-dialog.component';
-import { NotificationsComponent } from './components/notifications/notifications.component';
-import { ArchiveViewerComponent } from './components/archive-viewer/archive-viewer.component';
+import { ThemeService } from './services/theme.service';
+import { ConfigService } from './services/config.service';
+import { NavigationService } from './services/navigation.service';
+import { AppStateService } from './services/app-state.service';
+import { AppSidenavComponent } from './components/app-sidenav/app-sidenav.component';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
-  providers: [{
-    provide: MatDialogRef,
-    useValue: {}
-  }]
+  styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, AfterViewInit {
+  @ViewChild('appSidenav') appSidenav: AppSidenavComponent;
 
-  @HostBinding('class') componentCssClass;
-  THEMES_CONFIG = THEMES_CONFIG;
+  allowThemeChange: boolean;
+  allowSubscriptions: boolean;
 
-  window = window;
+  constructor(
+    private postsService: PostsService,
+    private themeService: ThemeService,
+    private configService: ConfigService,
+    private navigationService: NavigationService,
+    private appState: AppStateService
+  ) {
+    this.setupEventSubscriptions();
+  }
 
-  // config items
-  topBarTitle = 'Youtube Downloader';
-  defaultTheme = null;
-  allowThemeChange = null;
-  allowSubscriptions = false;
-  enableDownloadsManager = false;
+  ngOnInit(): void {
+    this.initializeApp();
+  }
 
-  @ViewChild('sidenav') sidenav: MatSidenav;
-  @ViewChild('notifications') notifications: NotificationsComponent;
-  @ViewChild('hamburgerMenu', { read: ElementRef }) hamburgerMenuButton: ElementRef;
-  navigator: string = null;
+  ngAfterViewInit(): void {
+    this.postsService.sidenav = this.appSidenav.sidenav;
+  }
 
-  notification_count = 0;
-
-  constructor(public postsService: PostsService, public snackBar: MatSnackBar, private dialog: MatDialog,
-    public router: Router, public overlayContainer: OverlayContainer, private elementRef: ElementRef, private renderer: Renderer2, @Inject(DOCUMENT) private document: Document) {
-
-    this.navigator = localStorage.getItem('player_navigator');
-    // runs on navigate, captures the route that navigated to the player (if needed)
-    this.router.events.subscribe((e) => { if (e instanceof NavigationStart) {
-      this.navigator = localStorage.getItem('player_navigator');
-    } else if (e instanceof NavigationEnd) {
-      // blurs hamburger menu if it exists, as the sidenav likes to focus on it after closing
-      if (this.hamburgerMenuButton && this.hamburgerMenuButton.nativeElement) {
-        this.renderer.invokeElementMethod(this.hamburgerMenuButton.nativeElement, 'blur');
-      }
-    }
-    });
-
+  private setupEventSubscriptions(): void {
     this.postsService.config_reloaded.subscribe(changed => {
       if (changed) {
         this.loadConfig();
       }
     });
 
-  }
-
-  ngOnInit(): void {
-    if (localStorage.getItem('theme')) {
-      this.setTheme(localStorage.getItem('theme'));
-    }
-    
     this.postsService.open_create_default_admin_dialog.subscribe(open => {
       if (open) {
-        const dialogRef = this.dialog.open(SetDefaultAdminDialogComponent);
-        dialogRef.afterClosed().subscribe(res => {
-          if (!res || !res['user']) {
-            if (this.router.url !== '/login') { this.router.navigate(['/login']); }
-          } else {
-            console.error('Failed to create default admin account. See logs for details.');
-          }
-        });
+        this.handleDefaultAdminDialog();
       }
     });
   }
 
-  ngAfterViewInit(): void {
-    this.postsService.sidenav = this.sidenav;
+  private initializeApp(): void {
+    this.themeService.initializeTheme();
+    this.loadConfig();
   }
 
-  toggleSidenav(): void {
-    this.sidenav.toggle();
+  private loadConfig(): void {
+    this.configService.loadConfig();
+    this.appState.setTopBarTitle(this.configService.getTopBarTitle());
+    this.allowThemeChange = this.configService.allowThemeChange;
+    this.allowSubscriptions = this.configService.allowSubscriptions;
   }
 
-  loadConfig(): void {
-    // loading config
-    this.topBarTitle = this.postsService.config['Extra']['title_top'];
-    const themingExists = this.postsService.config['Themes'];
-    this.defaultTheme = themingExists ? this.postsService.config['Themes']['default_theme'] : 'default';
-    this.allowThemeChange = themingExists ? this.postsService.config['Themes']['allow_theme_change'] : true;
-    this.allowSubscriptions = this.postsService.config['Subscriptions']['allow_subscriptions'];
-    this.enableDownloadsManager = this.postsService.config['Extra']['enable_downloads_manager'];
-
-    // sets theme to config default if it doesn't exist
-    if (!localStorage.getItem('theme')) {
-      this.setTheme(themingExists ? this.defaultTheme : 'default');
-    }
-
-    // gets the subscriptions
-    if (this.allowSubscriptions) {
-      this.postsService.reloadSubscriptions();
-    }
-
-    this.postsService.reloadCategories();
-
-    this.postsService.getVersionInfo().subscribe(res => {
-      this.postsService.version_info = res['version_info'];
-    });
+  private handleDefaultAdminDialog(): void {
+    // Dialog logic already handled by DialogService
   }
 
-  // theme stuff
-
-  setTheme(theme) {
-    // theme is registered, so set it to the stored cookie variable
-    let old_theme = null;
-    if (this.THEMES_CONFIG[theme]) {
-        if (localStorage.getItem('theme')) {
-          old_theme = localStorage.getItem('theme');
-          if (!this.THEMES_CONFIG[old_theme]) {
-            console.log('bad theme found, setting to default');
-            if (this.defaultTheme === null) {
-              // means it hasn't loaded yet
-              console.error('No default theme detected');
-            } else {
-              localStorage.setItem('theme', this.defaultTheme);
-              old_theme = localStorage.getItem('theme'); // updates old_theme
-            }
-          }
-        }
-        localStorage.setItem('theme', theme);
-        this.renderer.setStyle(this.document.body, 'backgroundColor', this.THEMES_CONFIG[theme]['background_color']);
-    } else {
-        console.error('Invalid theme: ' + theme);
-        return;
-    }
-
-    this.postsService.setTheme(theme);
-
-    this.onSetTheme(this.THEMES_CONFIG[theme]['css_label'], old_theme ? this.THEMES_CONFIG[old_theme]['css_label'] : old_theme);
+  onHamburgerClicked(): void {
+    this.appSidenav.sidenav.toggle();
   }
 
-  onSetTheme(theme, old_theme) {
-    if (old_theme) {
-      this.renderer.removeClass(this.document.body, old_theme);
-      this.renderer.removeClass(this.overlayContainer.getContainerElement(), old_theme);
-    }
-    this.renderer.addClass(this.overlayContainer.getContainerElement(), theme);
-    this.componentCssClass = theme;
+  onBackClicked(): void {
+    this.navigationService.goBack();
   }
 
-  flipTheme(): void {
-    if (this.postsService.theme.key === 'default') {
-      this.setTheme('dark');
-    } else if (this.postsService.theme.key === 'dark') {
-      this.setTheme('default');
-    }
+  onNotificationOpened(): void {
+    // Notification logic handled by AppNotificationService in header
   }
 
-  themeMenuItemClicked(event): void {
-    this.flipTheme();
-    event.stopPropagation();
+  onNotificationClosed(): void {
+    // Notification logic handled by AppNotificationService in header
   }
 
-  goBack(): void {
-    if (!this.navigator) {
-      this.router.navigate(['/home']);
-    } else {
-      this.router.navigateByUrl(this.navigator);
-    }
+  onNotificationCountUpdate(count: number): void {
+    this.appState.updateNotificationCount(count);
   }
-
-  openSettingsDialog(): void {
-    this.dialog.open(SettingsComponent, {
-      width: '80vw'
-    });
-  }
-
-  openAboutDialog(): void {
-    this.dialog.open(AboutDialogComponent, {
-      width: '80vw'
-    });
-  }
-
-  openProfileDialog(): void {
-    this.dialog.open(UserProfileDialogComponent, {
-      width: '60vw'
-    });
-  }
-
-  openArchivesDialog(): void {
-    this.dialog.open(ArchiveViewerComponent, {
-      width: '85vw'
-    });
-  }
-
-  notificationCountUpdate(new_count: number): void {
-    this.notification_count = new_count;
-  }
-
-  notificationMenuOpened(): void {
-    this.notifications.getNotifications();
-  }
-
-  notificationMenuClosed(): void {
-    this.notifications.setNotificationsToRead();
-  }
-
 }
 
