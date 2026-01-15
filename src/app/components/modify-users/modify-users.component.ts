@@ -9,6 +9,8 @@ import { AddUserDialogComponent } from 'app/dialogs/add-user-dialog/add-user-dia
 import { ManageUserComponent } from '../manage-user/manage-user.component';
 import { ManageRoleComponent } from '../manage-role/manage-role.component';
 import { User } from 'api-types';
+import { UserManagementService } from 'app/services/user-management.service';
+import { ValidationUtilsService } from 'app/services/validation-utils.service';
 
 @Component({
   selector: 'app-modify-users',
@@ -38,8 +40,14 @@ export class ModifyUsersComponent implements OnInit, AfterViewInit {
   roles = null;
 
 
-  constructor(public postsService: PostsService, public snackBar: MatSnackBar, public dialog: MatDialog,
-    private dialogRef: MatDialogRef<ModifyUsersComponent>) { }
+  constructor(
+    public postsService: PostsService,
+    public snackBar: MatSnackBar,
+    public dialog: MatDialog,
+    private dialogRef: MatDialogRef<ModifyUsersComponent>,
+    private userManagementService: UserManagementService,
+    private validationUtilsService: ValidationUtilsService
+  ) { }
 
   ngOnInit() {
     this.getArray();
@@ -65,15 +73,15 @@ export class ModifyUsersComponent implements OnInit, AfterViewInit {
 
   applyFilter(event: KeyboardEvent) {
     let filterValue = (event.target as HTMLInputElement).value; // "as HTMLInputElement" is required: https://angular.io/guide/user-input#type-the-event
-    filterValue = filterValue.trim(); // Remove whitespace
-    filterValue = filterValue.toLowerCase(); // Datasource defaults to lowercase matches
-    this.dataSource.filter = filterValue;
-  }
-
-  private getArray() {
-    this.postsService.getUsers().subscribe(res => {
+    filteuserManagementService.getUsers().subscribe(res => {
       this.users = res['users'];
       this.createAndSortData();
+      this.afterGetData();
+    });
+  }
+
+  getRoles() {
+    this.userManagementateAndSortData();
       this.afterGetData();
     });
   }
@@ -97,15 +105,13 @@ export class ModifyUsersComponent implements OnInit, AfterViewInit {
   }
 
   finishEditing(user_uid: string) {
-    if (this.constructedObject && this.constructedObject['name'] && this.constructedObject['role']) {
-      if (!isEmptyOrSpaces(this.constructedObject['name']) && !isEmptyOrSpaces(this.constructedObject['role'])) {
-        const index_of_object = this.indexOfUser(user_uid);
-        this.users[index_of_object] = this.constructedObject;
-        this.constructedObject = {};
-        this.editObject = null;
-        this.setUser(this.users[index_of_object]);
-        this.createAndSortData();
-      }
+    if (this.validationUtilsService.isValidUserData(this.constructedObject)) {
+      const index_of_object = this.indexOfUser(user_uid);
+      this.users[index_of_object] = this.constructedObject;
+      this.constructedObject = {};
+      this.editObject = null;
+      this.setUser(this.users[index_of_object]);
+      this.createAndSortData();
     }
   }
 
@@ -125,28 +131,16 @@ export class ModifyUsersComponent implements OnInit, AfterViewInit {
 
   // checks if user is in users array by name
   uidInUserList(user_uid: string) {
-    for (let i = 0; i < this.users.length; i++) {
-      if (this.users[i].uid === user_uid) {
-        return true;
-      }
-    }
-    return false;
+  uidInUserList(user_uid: string) {
+    return this.userManagementService.findUserByUid(this.users, user_uid) !== null;
   }
 
-  // gets index of user in users array by name
   indexOfUser(user_uid: string) {
-    for (let i = 0; i < this.users.length; i++) {
-      if (this.users[i].uid === user_uid) {
-        return i;
-      }
-    }
-    return -1;
+    return this.userManagementService.findUserIndex(this.users, user_uid);
   }
 
   setUser(change_obj) {
-    this.postsService.changeUser(change_obj).subscribe(() => {
-      this.getArray();
-    });
+    this.userManagement
   }
 
   manageUser(user_uid: string) {
@@ -175,23 +169,16 @@ export class ModifyUsersComponent implements OnInit, AfterViewInit {
     const filteredData = [];
     for (let i = 0; i < this.users.length; i++) {
       filteredData.push(JSON.parse(JSON.stringify(this.users[i])));
-    }
-
-    // Assign the data to the data source for the table to render
-    this.dataSource.data = filteredData;
-  }
-
-  openModifyRole(role) {
-    const dialogRef = this.dialog.open(ManageRoleComponent, {
-      data: {
-        role: role
-      }
-    });
-
-    dialogRef.afterClosed().subscribe(() => {
-      this.getRoles();
+    }userManagementService.deleteUser(user_uid).subscribe(() => {
+      this.getArray();
+    }, () => {
+      this.getArray();
     });
   }
+
+  createAndSortData() {
+    const sortedUsers = this.userManagementService.sortUsersByName(this.users);
+    const filteredData = this.userManagementService.cloneUsers(sortedUsers);
 
   closeDialog() {
     this.dialogRef.close();
