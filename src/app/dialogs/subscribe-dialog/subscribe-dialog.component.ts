@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { MatDialogRef, MatDialog } from '@angular/material/dialog';
-import { PostsService } from 'app/posts.services';
 import { ArgModifierDialogComponent } from '../arg-modifier-dialog/arg-modifier-dialog.component';
+import { SubscribeDataService } from 'app/services/subscribe-data.service';
+import { SubscribeFormService, QUALITY_OPTIONS, TIME_UNITS } from 'app/services/subscribe-form.service';
 
 @Component({
   selector: 'app-subscribe-dialog',
@@ -9,107 +10,77 @@ import { ArgModifierDialogComponent } from '../arg-modifier-dialog/arg-modifier-
   styleUrls: ['./subscribe-dialog.component.scss']
 })
 export class SubscribeDialogComponent implements OnInit {
-  // inputs
-  timerange_amount;
-  timerange_unit = 'days';
-  download_all = true;
-  url = null;
-  name = null;
-
+  url: string | null = null;
+  name: string | null = null;
+  downloadAll = true;
+  timerangeAmount: number | null = null;
+  timerangeUnit = 'days';
   maxQuality = 'best';
-
-  // state
+  audioOnlyMode = false;
+  customArgs = '';
+  customFileOutput = '';
   subscribing = false;
 
-  // audio only mode
-  audioOnlyMode = false;
+  availableQualities = QUALITY_OPTIONS;
+  timeUnits = TIME_UNITS;
 
-  customFileOutput = '';
-  customArgs = '';
+  constructor(
+    private dialog: MatDialog,
+    public dialogRef: MatDialogRef<SubscribeDialogComponent>,
+    private dataService: SubscribeDataService,
+    private formService: SubscribeFormService
+  ) { }
 
-  available_qualities = [
-    {
-      'label': 'Best',
-      'value': 'best'
-    },
-    {
-      'label': '4K',
-      'value': '2160'
-    },
-    {
-      'label': '1440p',
-      'value': '1440'
-    },
-    {
-      'label': '1080p',
-      'value': '1080'
-    },
-    {
-      'label': '720p',
-      'value': '720'
-    },
-    {
-      'label': '480p',
-      'value': '480'
-    },
-    {
-      'label': '360p',
-      'value': '360'
+  ngOnInit(): void { }
+
+  subscribeClicked(): void {
+    const validation = this.formService.validateForm(this.url, this.downloadAll, this.timerangeAmount);
+    if (!validation.valid) {
+      this.dataService.notifyError(validation.error);
+      return;
     }
-  ];
 
-  time_units = [
-    'day',
-    'week',
-    'month',
-    'year'
-  ];
-
-  constructor(private postsService: PostsService,
-              private dialog: MatDialog,
-              public dialogRef: MatDialogRef<SubscribeDialogComponent>) { }
-
-  ngOnInit() {
+    this.subscribing = true;
+    const timerange = this.formService.buildTimerange(this.downloadAll, this.timerangeAmount, this.timerangeUnit);
+    
+    this.dataService.createSubscription({
+      url: this.url,
+      name: this.name,
+      timerange,
+      maxQuality: this.maxQuality,
+      audioOnlyMode: this.audioOnlyMode,
+      customArgs: this.customArgs,
+      customFileOutput: this.customFileOutput
+    }).subscribe(
+      res => this.handleSubscribeResponse(res),
+      () => this.handleSubscribeError()
+    );
   }
 
-  subscribeClicked() {
-    if (this.url && this.url !== '') {
-      // timerange must be specified if download_all is false
-      if (!this.download_all && !this.timerange_amount) {
-        this.postsService.openSnackBar($localize`You must specify an amount of time`);
-        return;
+  private handleSubscribeResponse(res: { new_sub?: any; error?: string }): void {
+    this.subscribing = false;
+    if (res.new_sub) {
+      this.dialogRef.close(res.new_sub);
+    } else {
+      if (res.error) {
+        this.dataService.notifyError($localize`ERROR: ` + res.error);
       }
-      this.subscribing = true;
-
-      let timerange = null;
-      if (!this.download_all) {
-        timerange = 'now-' + this.timerange_amount.toString() + this.timerange_unit;
-      }
-      this.postsService.createSubscription(this.url, this.name, timerange, this.maxQuality,
-                                          this.audioOnlyMode, this.customArgs, this.customFileOutput).subscribe(res => {
-        this.subscribing = false;
-        if (res['new_sub']) {
-          this.dialogRef.close(res['new_sub']);
-        } else {
-          if (res['error']) {
-            this.postsService.openSnackBar($localize`ERROR: ` + res['error']);
-          }
-          this.dialogRef.close();
-        }
-      });
+      this.dialogRef.close();
     }
   }
 
-  // modify custom args
-  openArgsModifierDialog() {
+  private handleSubscribeError(): void {
+    this.subscribing = false;
+    this.dataService.notifyError($localize`Failed to create subscription`);
+  }
+
+  openArgsModifierDialog(): void {
     const dialogRef = this.dialog.open(ArgModifierDialogComponent, {
-      data: {
-       initial_args: this.customArgs
-      }
+      data: { initial_args: this.customArgs }
     });
-    dialogRef.afterClosed().subscribe(new_args => {
-      if (new_args !== null && new_args !== undefined) {
-        this.customArgs = new_args;
+    dialogRef.afterClosed().subscribe(newArgs => {
+      if (newArgs !== null && newArgs !== undefined) {
+        this.customArgs = newArgs;
       }
     });
   }

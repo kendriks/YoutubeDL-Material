@@ -1,76 +1,52 @@
 // https://stackoverflow.com/a/58535434/8088021
 
-import { Directive, ElementRef, HostListener } from '@angular/core';
+import { Directive, HostListener, Renderer2 } from '@angular/core';
+import { NumberInputUtils } from './number-input.utils';
 
 @Directive({
   selector: '[onlyNumber]'
 })
 export class OnlyNumberDirective {
-
-  private navigationKeys = [
-    'Backspace',
-    'Delete',
-    'Tab',
-    'Escape',
-    'Enter',
-    'Home',
-    'End',
-    'ArrowLeft',
-    'ArrowRight',
-    'Clear',
-    'Copy',
-    'Paste'
-  ];
-  inputElement: HTMLElement;
-  constructor(public el: ElementRef) {
-    this.inputElement = el.nativeElement;
-  }
+  constructor(private renderer: Renderer2) {}
 
   @HostListener('keydown', ['$event'])
-  onKeyDown(e: KeyboardEvent) {
-    if (
-      this.navigationKeys.indexOf(e.key) > -1 || // Allow: navigation keys: backspace, delete, arrows etc.
-      (e.key === 'a' && e.ctrlKey === true) || // Allow: Ctrl+A
-      (e.key === 'c' && e.ctrlKey === true) || // Allow: Ctrl+C
-      (e.key === 'v' && e.ctrlKey === true) || // Allow: Ctrl+V
-      (e.key === 'x' && e.ctrlKey === true) || // Allow: Ctrl+X
-      (e.key === 'a' && e.metaKey === true) || // Allow: Cmd+A (Mac)
-      (e.key === 'c' && e.metaKey === true) || // Allow: Cmd+C (Mac)
-      (e.key === 'v' && e.metaKey === true) || // Allow: Cmd+V (Mac)
-      (e.key === 'x' && e.metaKey === true) // Allow: Cmd+X (Mac)
-    ) {
-      // let it happen, don't do anything
+  onKeyDown(event: KeyboardEvent): void {
+    const isAllowedKey =
+      NumberInputUtils.isNavigationOrClipboardKey(event.key) ||
+      NumberInputUtils.isCtrlOrCmdClipboardAction(event.ctrlKey, event.metaKey, event.key);
+
+    if (isAllowedKey) {
       return;
     }
-    // Ensure that it is a number and stop the keypress
-    const key = Number(e.key)
-    if (
-      (e.shiftKey || (isNaN(key) && !(e.key === '.')))
-    ) {
-      e.preventDefault();
+
+    if (!NumberInputUtils.isValidNumberKey(event.key, event.shiftKey)) {
+      event.preventDefault();
     }
   }
 
   @HostListener('paste', ['$event'])
-  onPaste(event: ClipboardEvent) {
+  onPaste(event: ClipboardEvent): void {
     event.preventDefault();
-    const pastedInput: string = event.clipboardData
-      .getData('text/plain')
-      .replace(/\D/g, ''); // get a digit-only string
-    const input = this.inputElement as HTMLInputElement;
-    input.value = pastedInput;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const input = event.target as HTMLInputElement;
+    const pastedInput = NumberInputUtils.extractDigits(
+      event.clipboardData?.getData('text/plain') || ''
+    );
+    this.setInputValue(input, pastedInput);
   }
 
   @HostListener('drop', ['$event'])
-  onDrop(event: DragEvent) {
+  onDrop(event: DragEvent): void {
     event.preventDefault();
-    const textData = event.dataTransfer.getData('text').replace(/\D/g, '');
-    this.inputElement.focus();
-    const input = this.inputElement as HTMLInputElement;
-    input.value = textData;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const input = event.target as HTMLInputElement;
+    const textData = NumberInputUtils.extractDigits(
+      event.dataTransfer?.getData('text') || ''
+    );
+    this.renderer.setProperty(input, 'focus', true);
+    this.setInputValue(input, textData);
   }
 
-
+  private setInputValue(input: HTMLInputElement, value: string): void {
+    this.renderer.setProperty(input, 'value', value);
+    this.renderer.dispatchEvent(input, new Event('input', { bubbles: true }));
+  }
 }

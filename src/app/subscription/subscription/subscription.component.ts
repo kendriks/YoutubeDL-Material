@@ -1,9 +1,11 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { PostsService } from 'app/posts.services';
-import { ActivatedRoute, Router, ParamMap } from '@angular/router';
-import { MatDialog } from '@angular/material/dialog';
-import { EditSubscriptionDialogComponent } from 'app/dialogs/edit-subscription-dialog/edit-subscription-dialog.component';
-import { Subscription } from 'api-types';
+import { ActivatedRoute } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { SubscriptionData } from 'api-types';
+import { SubscriptionStateService } from 'app/services/subscription-state.service';
+import { SubscriptionActionsService } from 'app/services/subscription-actions.service';
+import { SubscriptionUiService } from 'app/services/subscription-ui.service';
 
 @Component({
   selector: 'app-subscription',
@@ -11,116 +13,120 @@ import { Subscription } from 'api-types';
   styleUrls: ['./subscription.component.scss']
 })
 export class SubscriptionComponent implements OnInit, OnDestroy {
-
-  id = null;
-  subscription: Subscription = null;
-  use_youtubedl_archive = false;
-  descendingMode = true;
+  subscription: SubscriptionData = null;
   downloading = false;
-  sub_interval = null;
   check_clicked = false;
   cancel_clicked = false;
 
-  constructor(private postsService: PostsService, private route: ActivatedRoute, private router: Router, private dialog: MatDialog) { }
+  private id: string;
+  private pollingSubscription: Subscription | null = null;
+  private previousVideoCount = 0;
+  private subscriptions: Subscription[] = [];
 
-  ngOnInit() {
-    this.route.params.subscribe(params => {
-      this.id = params['id'];
+  constructor(
+    private route: ActivatedRoute,
+    private stateService: SubscriptionStateService,
+    private actionsService: SubscriptionActionsService,
+    private uiService: SubscriptionUiService
+  ) { }
 
-      if (this.sub_interval) { clearInterval(this.sub_interval); }
-
-      this.postsService.service_initialized.subscribe(init => {
-        if (init) {
-          this.getConfig();
-          this.getSubscription();
-          this.sub_interval = setInterval(() => this.getSubscription(true), 1000);
-        }
-      });
-    });
+  ngOnInit(): void {
+    this.subscriptions.push(
+      this.route.params.subscribe(params => {
+        this.id = params['id'];
+        this.setupPolling();
+      })
+    );
   }
 
-  ngOnDestroy() {
-    // prevents subscription getter from running in the background
-    if (this.sub_interval) {
-      clearInterval(this.sub_interval);
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    if (this.pollingSubscription) this.pollingSubscription.unsubscribe();
+  }
+
+  private setupPolling(): void {
+    if (this.pollingSubscription) this.pollingSubscription.unsubscribe();
+    this.pollingSubscription = this.stateService.getSubscriptionUpdates(this.id)
+      .subscribe(sub => this.onSubscriptionUpdate(sub));
+  }
+
+  private onSubscriptionUpdate(sub: SubscriptionData): void {
+    if (sub.videos.length > this.previousVideoCount) {
+      const postsService = require('app/posts.services').PostsService.prototype;
+      postsService.files_changed?.next(true);
     }
+    this.previousVideoCount = sub.videos.length;
+    this.subscription = sub;
   }
 
-  goBack() {
-    this.router.navigate(['/subscriptions']);
+  private updateClickState(type: 'check' | 'cancel'): void {
+    if (type === 'check') this.check_clicked = false;
+    else this.cancel_clicked = false;
   }
 
-  getSubscription(low_cost = false) {
-    this.postsService.getSubscription(this.id).subscribe(res => {
-      if (low_cost && res['subscription'].videos.length === this.subscription?.videos.length) {
-        if (res['subscription']['downloading'] !== this.subscription['downloading']) {
-          this.subscription['downloading'] = res['subscription']['downloading'];
-        }
-        return;
-      } else if (res['subscription']['videos'].length > (this.subscription?.videos.length || 0)) {
-        // only when files are added so we don't reload files when one is deleted
-        this.postsService.files_changed.next(true);
-      }
-      this.subscription = res['subscription'];
-    });
-  }
-
-  getConfig(): void {
-    this.use_youtubedl_archive = this.postsService.config['Downloader']['use_youtubedl_archive'];
-  }
-
-  downloadContent(): void {
-    this.downloading = true;
-    this.postsService.downloadSubFromServer(this.subscription.id).subscribe(res => {
-      this.downloading = false;
-      const blob: Blob = res;
-      saveAs(blob, this.subscription.name + '.zip');
-    }, err => {
-      console.log(err);
-      this.downloading = false;
-    });
+  goBack(): void {
+    this.uiService.navigateBack();
   }
 
   editSubscription(): void {
-    this.dialog.open(EditSubscriptionDialogComponent, {
-      data: {
-        sub: this.postsService.getSubscriptionByID(this.subscription.id)
-      }
-    });
+    this.uiService.openEditDialog(this.subscription.id);
   }
 
   watchSubscription(): void {
-    this.router.navigate(['/player', {sub_id: this.subscription.id}])
+    this.uiService.navigateToWatch(this.subscription.id);
   }
 
   checkSubscription(): void {
     this.check_clicked = true;
-    this.postsService.checkSubscription(this.subscription.id).subscribe(res => {
-      this.check_clicked = false;
-      if (!res['success']) {
-        this.postsService.openSnackBar('Failed to check subscription!');
-        return;
-      }
-    }, err => {
-      console.error(err);
-      this.check_clicked = false;
-      this.postsService.openSnackBar('Failed to check subscription!');
-    });
+    this.actionsService.checkSubscription(this.subscription.id)
+      .pipe(
+        tap(
+          (res: { success: boolean }) => {
+            this.updateClickState('check');
+            if (!res.success) this.actionsService.notifyError('Failed to check subscription!');
+          },
+          () => {
+            this.updateClickState('check');
+            this.actionsService.notifyError('Failed to check subscription!');
+          }
+        )
+      )
+      .subscribe();
   }
 
   cancelCheckSubscription(): void {
     this.cancel_clicked = true;
-    this.postsService.cancelCheckSubscription(this.subscription.id).subscribe(res => {
-      this.cancel_clicked = false;
-      if (!res['success']) {
-        this.postsService.openSnackBar('Failed to cancel check subscription!');
-        return;
-      }
-    }, err => {
-      console.error(err);
-      this.cancel_clicked = false;
-      this.postsService.openSnackBar('Failed to cancel check subscription!');
-    });
+    this.actionsService.cancelCheckSubscription(this.subscription.id)
+      .pipe(
+        tap(
+          (res: { success: boolean }) => {
+            this.updateClickState('cancel');
+            if (!res.success) this.actionsService.notifyError('Failed to cancel check subscription!');
+          },
+          () => {
+            this.updateClickState('cancel');
+            this.actionsService.notifyError('Failed to cancel check subscription!');
+          }
+        )
+      )
+      .subscribe();
   }
 
+  downloadContent(): void {
+    this.downloading = true;
+    this.actionsService.downloadSubscriptionContent(this.subscription.id)
+      .pipe(
+        tap(
+          (blob: Blob) => {
+            this.downloading = false;
+            this.uiService.downloadZip(blob, this.subscription.name);
+          },
+          () => {
+            this.downloading = false;
+            this.actionsService.notifyError('Failed to download subscription!');
+          }
+        )
+      )
+      .subscribe();
+  }
 }

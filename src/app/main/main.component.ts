@@ -1,20 +1,26 @@
-import { Component, OnInit, ElementRef, ViewChild, ViewChildren, QueryList } from '@angular/core';
-import {PostsService} from '../posts.services';
-import { Observable, Subject } from 'rxjs';
-import {UntypedFormControl, Validators} from '@angular/forms';
-import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { saveAs } from 'file-saver';
-import { YoutubeSearchService, Result } from '../youtube-search.service';
-import { Router, ActivatedRoute } from '@angular/router';
-import { Platform } from '@angular/cdk/platform';
-import { ArgModifierDialogComponent } from 'app/dialogs/arg-modifier-dialog/arg-modifier-dialog.component';
+import { Component, OnInit, ViewChild, Inject } from '@angular/core';
+import { PostsService } from '../posts.services';
+import { Subject } from 'rxjs';
+import { UntypedFormControl, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { RecentVideosComponent } from 'app/components/recent-videos/recent-videos.component';
-import { DatabaseFile, Download, FileType, Playlist } from 'api-types';
+import { DatabaseFile, Download, Playlist } from 'api-types';
 import { DOCUMENT } from '@angular/common';
-import { Inject } from '@angular/core';
-import { interval, Subscription } from 'rxjava';
-import { TimeService } from 'app/core/time.service';
+import { FormatParserHelper, ParsedFormats as ParsedFormatsHelper } from './format-parser.helper';
+import { UrlValidatorHelper } from './url-validator.helper';
+import { DownloadStateManager } from './download-state.manager';
+import { AppConfigManager } from './app-config.manager';
+import { YoutubeSearchManager } from './youtube-search.manager';
+import { QualityManager } from './quality.manager';
+import { SettingsManager } from './settings.manager';
+import { DownloadOrchestrator } from './download-orchestrator.service';
+import { NavigationService } from './navigation.service';
+import { UrlValidationService } from './url-validation.service';
+import { EventHandlerService } from './event-handler.service';
+import { ComponentLifecycleService } from './component-lifecycle.service';
+import { SimulationService } from './simulation.service';
+import { UiInteractionService } from './ui-interaction.service';
+import { ComponentInitializationService } from './component-initialization.service';
 
 
 @Component({
@@ -23,881 +29,140 @@ import { TimeService } from 'app/core/time.service';
   styleUrls: ['./main.component.css']
 })
 
-export interface AvailableFormat {
-  formats?: ParsedFormats;
-  formats_loading?: boolean;
-  formats_failed?: boolean;
-}
-
-export interface ParsedFormats {
-  best_audio_format?: string;
-  video?: VideoFormat[];
-  audio?: AudioFormat[];
-}
-
-export interface VideoFormat {
-  key: string;
-  height: number;
-  fps: number;
-  acodec?: string;
-  format_id: string;
-  label: string;
-  expected_filesize?: number;
-}
-
-export interface AudioFormat {
-  key: string;
-  bitrate: number;
-  format_id: string;
-  ext: string;
-  label: string;
-  expected_filesize?: number;
-}
-
+export type ParsedFormats = ParsedFormatsHelper;
+export { VideoFormat, AudioFormat } from './format-parser.helper';
+export { AvailableFormat } from './quality.manager';
 
 export class MainComponent implements OnInit {
   youtubeAuthDisabledOverride = false;
-
   iOS = false;
-
-  // local settings
-  determinateProgress = false;
-  downloadingfile = false;
-  audioOnly: boolean;
-  autoplay = false;
-  customArgsEnabled = false;
-  customArgs: string | null = null;
-  customOutputEnabled = false;
-  replaceArgs = false;
-  customOutput: string | null = null;
-  youtubeAuthEnabled = false;
-  youtubeUsername: string | null = null;
   youtubePassword: string | null = null;
-  cropFile = false;
-  cropFileStart = null;
-  cropFileEnd = null;
-  urlError = false;
-  path: string | string[] = '';
   url = '';
-  exists = '';
   percentDownloaded: number;
   autoStartDownload = false;
-  downloadIntervalSub: Subscription;
-
-
-  // global settings
-  fileManagerEnabled = false;
-  allowQualitySelect = false;
-  downloadOnlyMode = false;
-  forceAutoplay = false;
-  globalCustomArgs = null;
-  allowAdvancedDownload = false;
-  useDefaultDownloadingAgent = true;
-  customDownloadingAgent = null;
-
-
-
-  // cache
-  cachedAvailableFormats: Record<string, AvailableFormat> = {};
-  cachedFileManagerEnabled = localStorage.getItem('cached_filemanager_enabled') === 'true';
-
-  // youtube api
-  youtubeSearchEnabled = false;
-  youtubeAPIKey = null;
-  results_loading = false;
-  results_showing = true;
-  results: Result[] = [];
-
-
-  playlists = {'audio': [], 'video': []};
-  playlist_thumbnails = {};
-  downloads: Download[] = [];
-  download_uids: string[] = [];
-  current_download: Download = null;
-
   urlForm = new UntypedFormControl('', [Validators.required]);
-
-
-
-  qualityOptions = {
-    'video': [
-      {
-        'resolution': '3840x2160',
-        'value': '2160',
-        'label': '2160p (4K)'
-      },
-      {
-        'resolution': '2560x1440',
-        'value': '1440',
-        'label': '1440p'
-      },
-      {
-        'resolution': '1920x1080',
-        'value': '1080',
-        'label': '1080p'
-      },
-      {
-        'resolution': '1280x720',
-        'value': '720',
-        'label': '720p'
-      },
-      {
-        'resolution': '720x480',
-        'value': '480',
-        'label': '480p'
-      },
-      {
-        'resolution': '480x360',
-        'value': '360',
-        'label': '360p'
-      },
-      {
-        'resolution': '360x240',
-        'value': '240',
-        'label': '240p'
-      },
-      {
-        'resolution': '256x144',
-        'value': '144',
-        'label': '144p'
-      }
-    ],
-    'audio': [
-      // TODO: implement
-      // {
-      //   'kbitrate': '256',
-      //   'value': '256K',
-      //   'label': '256 Kbps'
-      // },
-      // {
-      //   'kbitrate': '160',
-      //   'value': '160K',
-      //   'label': '160 Kbps'
-      // },
-      // {
-      //   'kbitrate': '128',
-      //   'value': '128K',
-      //   'label': '128 Kbps'
-      // },
-      // {
-      //   'kbitrate': '96',
-      //   'value': '96K',
-      //   'label': '96 Kbps'
-      // },
-      // {
-      //   'kbitrate': '70',
-      //   'value': '70K',
-      //   'label': '70 Kbps'
-      // },
-      // {
-      //   'kbitrate': '50',
-      //   'value': '50K',
-      //   'label': '50 Kbps'
-      // },
-      // {
-      //   'kbitrate': '32',
-      //   'value': '32K',
-      //   'label': '32 Kbps'
-      // }
-    ]
-  }
-
-  selectedMaxQuality = '';
-  selectedQuality: string | null = null;
-  formats_loading = false;
-
-  //@ViewChild('urlinput', { read: ElementRef }) urlInput: ElementRef;
-  @ViewChild('recentVideos') recentVideos: RecentVideosComponent;
-  last_valid_url = '';
-  last_url_check = 0;
-
   argsChangedSubject: Subject<boolean> = new Subject<boolean>();
   simulatedOutput = '';
+  cachedFileManagerEnabled = localStorage.getItem('cached_filemanager_enabled') === 'true';
 
-//  interval_id = null;
+  @ViewChild('recentVideos') recentVideos: RecentVideosComponent;
 
   constructor(
     public postsService: PostsService,
-    private youtubeSearch: YoutubeSearchService,
-    public snackBar: MatSnackBar,
-    private router: Router,
-    public dialog: MatDialog,
-    private platform: Platform,
     private route: ActivatedRoute,
     @Inject(DOCUMENT) private document: Document,
-    private timeService: TimeService
-  ) {
-    this.audioOnly = false;
-  }
+    public downloadState: DownloadStateManager,
+    public searchManager: YoutubeSearchManager,
+    public qualityManager: QualityManager,
+    public settings: SettingsManager,
+    public downloadOrchestrator: DownloadOrchestrator,
+    private navigationService: NavigationService,
+    private urlValidation: UrlValidationService,
+    private eventHandler: EventHandlerService,
+    private lifecycle: ComponentLifecycleService,
+    private simulation: SimulationService,
+    public uiInteraction: UiInteractionService,
+    private initialization: ComponentInitializationService
+  ) {}
 
 
   async configLoad(): Promise<void> {
-    await this.loadConfig();
-    if (this.autoStartDownload) {
-      this.downloadClicked();
-    }
+    await this.lifecycle.loadConfiguration(
+      (enabled) => this.cachedFileManagerEnabled = enabled,
+      () => this.getSimulatedOutput(),
+      () => this.getCurrentDownload()
+    );
+    if (this.autoStartDownload) this.downloadClicked();
   }
 
-  async loadConfig(): Promise<boolean> {
-    // loading config
-    this.fileManagerEnabled = this.postsService.config['Extra']['file_manager_enabled']
-                              && this.postsService.hasPermission('filemanager');
-    this.downloadOnlyMode = this.postsService.config['Extra']['download_only_mode'];
-    this.forceAutoplay = this.postsService.config['Extra']['force_autoplay'];
-    this.globalCustomArgs = this.postsService.config['Downloader']['custom_args'];
-    this.youtubeSearchEnabled = this.postsService.config['API'] && this.postsService.config['API']['use_youtube_API'] &&
-        this.postsService.config['API']['youtube_API_key'];
-    this.youtubeAPIKey = this.youtubeSearchEnabled ? this.postsService.config['API']['youtube_API_key'] : null;
-    this.allowQualitySelect = this.postsService.config['Extra']['allow_quality_select'];
-    this.allowAdvancedDownload = this.postsService.config['Advanced']['allow_advanced_download']
-                                  && this.postsService.hasPermission('advanced_download');
-    this.useDefaultDownloadingAgent = this.postsService.config['Advanced']['use_default_downloading_agent'];
-    this.customDownloadingAgent = this.postsService.config['Advanced']['custom_downloading_agent'];
-
-    // set final cache items
-
-    localStorage.setItem('cached_filemanager_enabled', this.fileManagerEnabled.toString());
-    this.cachedFileManagerEnabled = this.fileManagerEnabled;
-
-    if (this.allowAdvancedDownload) {
-      if (localStorage.getItem('customArgsEnabled') !== null) {
-        this.customArgsEnabled = localStorage.getItem('customArgsEnabled') === 'true';
-      }
-
-      if (localStorage.getItem('customOutputEnabled') !== null) {
-        this.customOutputEnabled = localStorage.getItem('customOutputEnabled') === 'true';
-      }
-
-      if (localStorage.getItem('replaceArgs') !== null) {
-        this.replaceArgs = localStorage.getItem('replaceArgs') === 'true';
-      }
-
-      if (localStorage.getItem('youtubeAuthEnabled') !== null) {
-        this.youtubeAuthEnabled = localStorage.getItem('youtubeAuthEnabled') === 'true';
-      }
-
-      // set advanced inputs
-      const customArgs = localStorage.getItem('customArgs');
-      const customOutput = localStorage.getItem('customOutput');
-      const youtubeUsername = localStorage.getItem('youtubeUsername');
-
-      if (customArgs && customArgs !== 'null') { this.customArgs = customArgs }
-      if (customOutput && customOutput !== 'null') { this.customOutput = customOutput }
-      if (youtubeUsername && youtubeUsername !== 'null') { this.youtubeUsername = youtubeUsername }
-
-      this.getSimulatedOutput();
-    }
-
-    // get downloads routine
-    if (this.downloadIntervalSub) {
-      this.downloadIntervalSub.unsubscribe();
-    }
-
-    this.downloadIntervalSub = interval(1000).subscribe(() => {
-      if (this.current_download) {
-        this.getCurrentDownload();
-      }
-    });
-
-
-    return true;
-  }
-
-  // app initialization.
   ngOnInit(): void {
     if (this.postsService.initialized) {
       this.configLoad();
     } else {
-      this.postsService.service_initialized.subscribe(init => {
-        if (init) {
-          this.configLoad();
-        }
-      });
+      this.postsService.service_initialized.subscribe(init => { if (init) this.configLoad(); });
     }
-
-    this.postsService.config_reloaded.subscribe(changed => {
-      if (changed) {
-        this.loadConfig();
-      }
-    });
-
-    this.iOS = this.platform.IOS;
-
-    // get checkboxes
-    if (localStorage.getItem('audioOnly') !== null) {
-      this.audioOnly = localStorage.getItem('audioOnly') === 'true';
-    }
-
-    this.autoplay = this.forceAutoplay;
-    if (!this.forceAutoplay && localStorage.getItem('autoplay') !== null) {
-      this.autoplay = localStorage.getItem('autoplay') === 'true';
-    }
-
-    // check if params exist
-    if (this.route.snapshot.paramMap.get('url')) {
-      this.url = decodeURIComponent(this.route.snapshot.paramMap.get('url'));
-      this.audioOnly = this.route.snapshot.paramMap.get('audioOnly') === 'true';
-
-      // set auto start flag to true
-      this.autoStartDownload = true;
-    }
-
-    this.argsChangedSubject
-      .debounceTime(500)
-      .subscribe((should_simulate) => {
-        if (should_simulate) this.getSimulatedOutput();
+    this.initialization.setupConfigListeners(() => this.configLoad());
+    this.iOS = this.initialization.getPlatformInfo().iOS;
+    this.settings.loadFromLocalStorage();
+    this.initialization.initializeFromRoute(
+      this.route, (url) => this.url = url,
+      (value) => this.settings.audioOnly = value, (value) => this.autoStartDownload = value
+    );
+    this.argsChangedSubject.debounceTime(500).subscribe((should_simulate) => {
+      if (should_simulate) this.getSimulatedOutput();
     });
   }
 
   ngAfterViewInit(): void {
-    if (this.youtubeSearchEnabled && this.youtubeAPIKey) {
-      this.youtubeSearch.initializeAPI(this.youtubeAPIKey);
-      this.attachToInput();
-    }
+    this.initialization.initializeYoutubeSearch(() => this.attachToInput());
   }
 
- ngOnDestroy(): void {
-   if (this.downloadIntervalSub) {
-     this.downloadIntervalSub.unsubscribe();
-   }
- }
+  ngOnDestroy(): void {
+    this.lifecycle.stopDownloadPolling();
+  }
 
-
-  // download helpers
   downloadHelper(container: DatabaseFile | Playlist, type: string, is_playlist = false, force_view = false, navigate_mode = false): void {
-    this.downloadingfile = false;
-    if (!this.autoplay && !this.downloadOnlyMode && !navigate_mode) {
-      // do nothing
-      this.reloadRecentVideos(is_playlist);
-    } else {
-      // if download only mode, just download the file. no redirect
-      if (force_view === false && this.downloadOnlyMode && !this.iOS) {
-        if (is_playlist) {
-          this.downloadPlaylist(container['uid']);
-        } else {
-          this.downloadFileFromServer(container as DatabaseFile, type);
-        }
-        this.reloadRecentVideos(is_playlist);
-      } else {
-        localStorage.setItem('player_navigator', this.router.url.split(';')[0]);
-        if (is_playlist) {
-          this.router.navigate(['/player', {playlist_id: container['id'], type: type}]);
-        } else {
-          this.router.navigate(['/player', {type: type, uid: container['uid']}]);
-        }
-      }
-    }
+    this.downloadOrchestrator.downloadingFile = false;
+    this.navigationService.handleDownloadComplete(
+      container, 
+      type, 
+      is_playlist, 
+      force_view, 
+      navigate_mode, 
+      this.iOS,
+      (is_pl) => this.reloadRecentVideos(is_pl)
+    );
   }
 
-  // download click handler
   downloadClicked(): void {
-    if (!this.ValidURL(this.url)) {
-      this.urlError = true;
-      return;
-    }
+    this.uiInteraction.urlError = !this.ValidURL(this.url);
+    if (this.uiInteraction.urlError) return;
 
-    this.urlError = false;
-
-    // get common args
-    const customArgs = (this.customArgsEnabled && this.replaceArgs ? this.customArgs : null);
-    const additionalArgs = (this.customArgsEnabled && !this.replaceArgs ? this.customArgs : null);
-    const customOutput = (this.customOutputEnabled ? this.customOutput : null);
-    const youtubeUsername = (this.youtubeAuthEnabled && this.youtubeUsername ? this.youtubeUsername : null);
-    const youtubePassword = (this.youtubeAuthEnabled && this.youtubePassword ? this.youtubePassword : null);
-
-    // set advanced inputs
-    if (this.allowAdvancedDownload) {
-      if (customArgs) {
-        localStorage.setItem('customArgs', customArgs);
+    this.downloadOrchestrator.initiateDownload(
+      this.url,
+      this.youtubePassword,
+      () => this.postsService.openSnackBar($localize`Download failed!`, 'OK.'),
+      () => {
+        this.postsService.openSnackBar($localize`Download for ${this.url}:url: has been queued!`);
+        this.url = '';
+        this.downloadOrchestrator.downloadingFile = false;
       }
-      if (customOutput) {
-        localStorage.setItem('customOutput', customOutput);
-      }
-      if (youtubeUsername) {
-        localStorage.setItem('youtubeUsername', youtubeUsername);
-      }
-    }
-
-    const type = this.audioOnly ? 'audio' : 'video';
-
-    const customQualityConfiguration = type === 'audio' ? this.getSelectedAudioFormat() : this.getSelectedVideoFormat();
-
-    let cropFileSettings = null;
-
-    if (this.cropFile) {
-      cropFileSettings = {
-        cropFileStart: this.cropFileStart,
-        cropFileEnd: this.cropFileEnd
-      }
-    }
-
-    const selected_quality = this.selectedQuality;
-    this.selectedQuality = '';
-    this.downloadingfile = true;
-
-    const urls = this.getURLArray(this.url);
-    for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      this.postsService.downloadFile(url, type as FileType, (customQualityConfiguration || selected_quality === '' || typeof selected_quality !== 'string' ? null : selected_quality),
-        customQualityConfiguration, customArgs, additionalArgs, customOutput, youtubeUsername, youtubePassword, cropFileSettings).subscribe(res => {
-          this.current_download = res['download'];
-          this.downloads.push(res['download']);
-          this.download_uids.push(res['download']['uid']);
-      }, () => { // can't access server
-        this.downloadingfile = false;
-        this.current_download = null;
-        this.postsService.openSnackBar($localize`Download failed!`, 'OK.');
-      });
-
-      if (!this.autoplay && urls.length === 1) {
-          const download_queued_message = $localize`Download for ${url}:url: has been queued!`;
-          this.postsService.openSnackBar(download_queued_message);
-          this.url = '';
-          this.downloadingfile = false;
-      }
-    }
+    );
   }
 
-  // download canceled handler
-  cancelDownload(download_to_cancel = null): void {
-    // if one is provided, cancel that one. otherwise, remove the current one
-    if (download_to_cancel) {
-      this.removeDownloadFromCurrentDownloads(download_to_cancel)
-      return;
-    }
-    this.downloadingfile = false;
-    this.current_download = null;
-  }
+  cancelDownload(download_to_cancel: Download | null = null): void { this.downloadOrchestrator.cancelDownload(download_to_cancel); }
+  visitURL(url: string): void { this.navigationService.visitURL(url, this.document); }
+  clearInput(): void { this.uiInteraction.clearInput((url) => this.url = url); }
+  onInputBlur(): void { this.uiInteraction.handleInputBlur(); }
+  useURL(url: string): void { this.uiInteraction.useSearchResult(url, (newUrl) => this.url = newUrl); }
+  inputChanged(new_val: string): void { this.uiInteraction.handleInputChange(new_val, () => this.ValidURL(new_val)); }
+  ValidURL(str: string): boolean { return this.urlValidation.validateAndProcess(str, () => this.argsChanged()); }
+  getSimulatedOutput(): void { this.simulation.generateAndFormatOutput(this.url, this.youtubePassword, (output) => this.simulatedOutput = output); }
+  attachToInput(): void { this.uiInteraction.attachSearchToInput(this.urlForm, () => this.url); }
+  argsChanged(): void { this.argsChangedSubject.next(true); }
 
-  getSelectedAudioFormat(): string {
-    if (typeof this.selectedQuality === 'string') { return null; }
-    const cachedFormatsExists = this.cachedAvailableFormats[this.url] && this.cachedAvailableFormats[this.url]['formats'];
-    if (cachedFormatsExists) {
-      return this.selectedQuality['format_id'];
-    } else {
-      return null;
-    }
-  }
-
-  getSelectedVideoFormat(): string {
-    if (typeof this.selectedQuality === 'string') { return null; }
-    const cachedFormats = this.cachedAvailableFormats[this.url] && this.cachedAvailableFormats[this.url]['formats'];
-    if (cachedFormats) {
-      if (this.selectedQuality) {
-        let selected_video_format = this.selectedQuality['format_id'];
-        // add in audio format if necessary
-        const audio_missing = !this.selectedQuality['acodec'] || this.selectedQuality['acodec'] === 'none';
-        if (audio_missing && cachedFormats['best_audio_format']) selected_video_format += `+${cachedFormats['best_audio_format']}`;
-        return selected_video_format;
-      }
-    }
-    return null;
-  }
-
-  getDownloadByUID(uid: string): Download {
-    const index = this.downloads.findIndex(download => download.uid === uid);
-    if (index !== -1) {
-      return this.downloads[index];
-    } else {
-      return null;
-    }
-  }
-
-  removeDownloadFromCurrentDownloads(download_to_remove: Download): boolean {
-    if (this.current_download === download_to_remove) {
-      this.current_download = null;
-    }
-    const index = this.downloads.indexOf(download_to_remove);
-    if (index !== -1) {
-      this.downloads.splice(index, 1);
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  downloadFileFromServer(file: DatabaseFile, type: string): void {
-    const ext = type === 'audio' ? 'mp3' : 'mp4'
-    this.postsService.downloadFileFromServer(file.uid).subscribe(res => {
-      const blob: Blob = res;
-      saveAs(blob, decodeURIComponent(file.id) + `.${ext}`);
-
-      if (!this.fileManagerEnabled) {
-        // tell server to delete the file once downloaded
-        this.postsService.deleteFile(file.uid).subscribe(() => {});
-      }
-    });
-  }
-
-  downloadPlaylist(playlist: Playlist): void {
-    this.postsService.downloadPlaylistFromServer(playlist.id).subscribe(res => {
-      const blob: Blob = res;
-      saveAs(blob, playlist.name + '.zip');
-    });
-
-  }
-
-  clearInput(): void {
-    this.url = '';
-    this.results_showing = false;
-  }
-
-  onInputBlur(): void {
-    this.results_showing = false;
-  }
-
-  visitURL(url: string): void {
-    this.document.defaultView?.open(url);
-  }
-
-
-  useURL(url: string): void {
-    this.results_showing = false;
-    this.url = url;
-  }
-
-  inputChanged(new_val: string): void {
-    this.selectedQuality = '';
-    if (new_val === '' || !new_val) {
-      this.results_showing = false;
-    } else {
-      if (this.ValidURL(new_val)) {
-        this.results_showing = false;
-      }
-    }
-  }
-
-  // checks if url is a valid URL
-  ValidURL(str: string): boolean {
-    // mark multiple urls as valid but don't get additional info
-    const urls = this.getURLArray(str);
-    if (urls.length > 1) {
-      this.autoplay = false;
-      return true;
-    }
-
-    // tslint:disable-next-line: max-line-length
-    const strRegex = /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)/;
-    const re = new RegExp(strRegex);
-    const valid = re.test(str);
-
-    if (!valid) { return false; }
-
-    // tslint:disable-next-line: max-line-length
-    const youtubeStrRegex = /(?:http(?:s)?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:(?:watch)?\?(?:.*&)?v(?:i)?=|(?:embed|v|vi|user)\/))([^\?&\"'<> #]+)/;
-    const reYT = new RegExp(youtubeStrRegex);
-    const ytValid = true || reYT.test(str);
-    if (valid && ytValid && this.timeService.now() - this.last_url_check > 1000) {
-      if (str !== this.last_valid_url && this.allowQualitySelect) {
-        this.getURLInfo(str);
-        this.argsChanged();
-      }
-      this.last_valid_url = str;
-      this.last_url_check = this.timeService.now();
-    }
-
-    return valid;
-  }
-
-  getURLInfo(url: string): void {
-    if (!this.cachedAvailableFormats[url]) {
-      this.cachedAvailableFormats[url] = {};
-    }
-    // if url is a youtube playlist, skip getting url info
-    if (url.includes('playlist')) {
-      // make it think that formats errored so that users have options
-      this.cachedAvailableFormats[url]['formats_loading'] = false;
-      this.cachedAvailableFormats[url]['formats_failed'] = true;
-      return;
-    }
-    if (!(this.cachedAvailableFormats[url] && this.cachedAvailableFormats[url]['formats'])) {
-      this.cachedAvailableFormats[url]['formats_loading'] = true;
-      this.postsService.getFileFormats(url).subscribe(res => {
-        this.cachedAvailableFormats[url]['formats_loading'] = false;
-        const infos = res['result'];
-        if (!infos || !infos.formats) {
-          this.errorFormats(url);
-          return;
-        }
-        this.cachedAvailableFormats[url]['formats'] = this.getAudioAndVideoFormats(infos.formats);
-      }, () => {
-        this.errorFormats(url);
-      });
-    }
-  }
-
-  getSimulatedOutput(): void {
-    const urls = this.getURLArray(this.url);
-    if (urls.length > 1) return;
-
-    // this function should be very similar to downloadClicked()
-    const customArgs = (this.customArgsEnabled && this.replaceArgs ? this.customArgs : null);
-    const additionalArgs = (this.customArgsEnabled && !this.replaceArgs ? this.customArgs : null);
-    const customOutput = (this.customOutputEnabled ? this.customOutput : null);
-    const youtubeUsername = (this.youtubeAuthEnabled && this.youtubeUsername ? this.youtubeUsername : null);
-    const youtubePassword = (this.youtubeAuthEnabled && this.youtubePassword ? this.youtubePassword : null);
-
-    const type = this.audioOnly ? 'audio' : 'video';
-
-    const customQualityConfiguration = type === 'audio' ? this.getSelectedAudioFormat() : this.getSelectedVideoFormat();
-
-    let cropFileSettings = null;
-
-    if (this.cropFile) {
-      cropFileSettings = {
-        cropFileStart: this.cropFileStart,
-        cropFileEnd: this.cropFileEnd
-      }
-    }
-
-    this.postsService.generateArgs(this.url, type as FileType, (customQualityConfiguration || this.selectedQuality === '' || typeof this.selectedQuality !== 'string' ? null : this.selectedQuality),
-      customQualityConfiguration, customArgs, additionalArgs, customOutput, youtubeUsername, youtubePassword, cropFileSettings).subscribe(res => {
-        const simulated_args = res['args'];
-        if (simulated_args) {
-          // hide password if needed
-          const passwordIndex = simulated_args.indexOf('--password');
-          if (passwordIndex !== -1 && passwordIndex !== simulated_args.length - 1) {
-            simulated_args[passwordIndex + 1] = simulated_args[passwordIndex + 1].replace(/./g, '*');
-          }
-          const downloader = this.postsService.config.Advanced.default_downloader;
-          this.simulatedOutput = `${downloader} ${this.url} ${simulated_args.join(' ')}`;
-        }
-    });
-  }
-
-  errorFormats(url: string): void {
-    this.cachedAvailableFormats[url]['formats_loading'] = false;
-    this.cachedAvailableFormats[url]['formats_failed'] = true;
-    console.error('Could not load formats for url ' + url);
-  }
-
-  attachToInput(): void {
-    this.urlForm.valueChanges
-      .pipe(
-        filter((text: string) => !!text && text.length > 1),
-        debounceTime(250),
-        tap(() => this.results_loading = true),
-        switchMap((query: string) => this.youtubeSearch.search(query))
-      )
-      .subscribe(
-        (results: Result[]) => {
-          this.results_loading = false;
-          if (this.url !== '' && results && results.length > 0) {
-            this.results = results;
-            this.results_showing = true;
-          } else {
-            this.results_showing = false;
-          }
-        },
-        () => {
-          this.results_loading = false;
-          this.results_showing = false;
-        }
-      );
-  }
-
-
-  argsChanged(): void {
-    this.argsChangedSubject.next(true);
-  }
-
-  videoModeChanged(new_val): void {
-    this.selectedQuality = '';
-    localStorage.setItem('audioOnly', new_val.checked.toString());
-    this.argsChanged();
-  }
-
-  autoplayChanged(new_val): void {
-    localStorage.setItem('autoplay', new_val.checked.toString());
-  }
-
-  customArgsEnabledChanged(new_val): void {
-    localStorage.setItem('customArgsEnabled', new_val.checked.toString());
-    this.argsChanged();
-  }
-
-  replaceArgsChanged(new_val): void {
-    localStorage.setItem('replaceArgs', new_val.checked.toString());
-    this.argsChanged();
-  }
-
-  customOutputEnabledChanged(new_val): void {
-    localStorage.setItem('customOutputEnabled', new_val.checked.toString());
-    this.argsChanged();
-  }
-
-  youtubeAuthEnabledChanged(new_val): void {
-    localStorage.setItem('youtubeAuthEnabled', new_val.checked.toString());
-    this.argsChanged();
-  }
-
-  getAudioAndVideoFormats(formats): void {
-    const audio_formats: any = {};
-    const video_formats: any = {};
-
-    for (let i = 0; i < formats.length; i++) {
-      const format_obj = {type: null};
-
-      const format = formats[i];
-      const format_type = (format.vcodec === 'none') ? 'audio' : 'video';
-
-      format_obj.type = format_type;
-      if (format_obj.type === 'audio' && format.abr) {
-        const key = format.abr.toString() + 'K';
-        format_obj['key'] = key;
-        format_obj['bitrate'] = format.abr;
-        format_obj['format_id'] = format.format_id;
-        format_obj['ext'] = format.ext;
-        format_obj['label'] = key;
-        format_obj['expected_filesize'] = format.filesize ? format.filesize : (format.filesize_approx || null);
-
-        // don't overwrite if not m4a
-        if (audio_formats[key]) {
-          if (format.ext === 'm4a') {
-            audio_formats[key] = format_obj;
-          }
-        } else {
-          audio_formats[key] = format_obj;
-        }
-      } else if (format_obj.type === 'video') {
-        // check if video format is mp4
-        const key = `${format.height}p${Math.round(format.fps)}`;
-        if (format.ext === 'mp4' || format.ext === 'mkv' || format.ext === 'webm') {
-          format_obj['key'] = key;
-          format_obj['height'] = format.height;
-          format_obj['acodec'] = format.acodec;
-          format_obj['format_id'] = format.format_id;
-          format_obj['label'] = key;
-          format_obj['fps'] = Math.round(format.fps);
-          format_obj['expected_filesize'] = format.filesize ? format.filesize : (format.filesize_approx || null);
-
-          // no acodec means no overwrite
-          if (!(video_formats[key]) || format_obj['acodec'] !== 'none') {
-            video_formats[key] = format_obj;
-          }
-        }
-      }
-    }
-
-    const parsed_formats: any = {};
-
-    parsed_formats['best_audio_format'] = this.getBestAudioFormatForMp4(audio_formats);
-
-    // add audio file size to the expected video file size -- but only if best_audio_format will be used (i.e. when the video has no acodec already). if acodec is present expected filesize will include it
-    for (const video_format of Object.values(video_formats)) {
-      if ((!video_format['acodec'] || video_format['acodec'] === 'none')
-        && video_format['expected_filesize']
-        && parsed_formats['best_audio_format']?.filesize)
-          video_format['expected_filesize'] += parsed_formats['best_audio_format'].filesize;
-    }
-
-    parsed_formats['video'] = Object.values(video_formats);
-    parsed_formats['audio'] = Object.values(audio_formats);
-
-    parsed_formats['video'] = parsed_formats['video'].sort((a, b) => b.height - a.height || b.fps - a.fps);
-    parsed_formats['audio'] = parsed_formats['audio'].sort((a, b) => b.bitrate - a.bitrate);
-
-    return parsed_formats;
-  }
-
-  getBestAudioFormatForMp4(audio_formats): void {
-    let best_audio_format_for_mp4 = null;
-    let best_audio_format_bitrate = 0;
-    const available_audio_format_keys = Object.keys(audio_formats);
-    for (let i = 0; i < available_audio_format_keys.length; i++) {
-      const audio_format_key = available_audio_format_keys[i];
-      const audio_format = audio_formats[audio_format_key];
-      const is_m4a = audio_format.ext === 'm4a';
-      if (is_m4a && audio_format.bitrate > best_audio_format_bitrate) {
-        best_audio_format_for_mp4 = audio_format.format_id;
-        best_audio_format_bitrate = audio_format.bitrate;
-      }
-    }
-    return best_audio_format_for_mp4;
-  }
-
-  // modify custom args
-  openArgsModifierDialog(): void {
-    const dialogRef = this.dialog.open(ArgModifierDialogComponent, {
-      data: {
-       initial_args: this.customArgs
-      }
-    });
-    dialogRef.afterClosed().subscribe(new_args => {
-      if (new_args !== null && new_args !== undefined) {
-        this.customArgs = new_args;
-      }
-    });
-  }
+  videoModeChanged(new_val): void { this.eventHandler.handleVideoModeChange(new_val.checked, () => this.argsChanged()); }
+  autoplayChanged(new_val): void { this.eventHandler.handleAutoplayChange(new_val.checked); }
+  customArgsEnabledChanged(new_val): void { this.eventHandler.handleCustomArgsEnabledChange(new_val.checked, () => this.argsChanged()); }
+  replaceArgsChanged(new_val): void { this.eventHandler.handleReplaceArgsChange(new_val.checked, () => this.argsChanged()); }
+  customOutputEnabledChanged(new_val): void { this.eventHandler.handleCustomOutputEnabledChange(new_val.checked, () => this.argsChanged()); }
+  youtubeAuthEnabledChanged(new_val): void { this.eventHandler.handleYoutubeAuthEnabledChange(new_val.checked, () => this.argsChanged()); }
+  openArgsModifierDialog(): void { this.uiInteraction.openArgsModifierDialog(); }
 
   getCurrentDownload(): void {
-    if (!this.current_download) {
-      return;
-    }
-    this.postsService.getCurrentDownload(this.current_download['uid']).subscribe(res => {
-      if (res['download']) {
-        this.current_download = res['download'];
-        this.percentDownloaded = this.current_download.percent_complete;
+    const currentDownload = this.downloadState.getCurrentDownload();
+    if (!currentDownload) return;
 
-        if (this.current_download['finished'] && !this.current_download['error']) {
-          const container = this.current_download['container'];
-          const is_playlist = this.current_download['file_uids'].length > 1;
-          const type = this.current_download['type'];
-          this.current_download = null;
-          this.downloadHelper(container, type, is_playlist, false);
-        } else if (this.current_download['finished'] && this.current_download['error']) {
-          this.downloadingfile = false;
-          this.current_download = null;
-          this.postsService.openSnackBar($localize`Download failed!`, 'OK.');
-        }
-      } else {
-        // console.log('failed to get new download');
+    this.postsService.getCurrentDownload(currentDownload['uid']).subscribe(res => {
+      if (res['download']) {
+        this.percentDownloaded = res['download'].percent_complete;
       }
+      this.lifecycle.handleDownloadComplete(
+        res,
+        (container, type, is_playlist) => this.downloadHelper(container, type, is_playlist)
+      );
     });
   }
 
-  reloadRecentVideos(is_playlist = false): void {
-    this.postsService.files_changed.next(true);
-    if (is_playlist) this.postsService.playlists_changed.next(true);
-  }
-
-  getURLArray(url_str: string): Array<string> {
-    let lines = url_str.split('\n');
-    lines = lines.filter(line => line);
-    return lines;
-  }
-
-    /**
-   * Format bytes as human-readable text.
-   * From: https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string
-   *
-   * @param bytes Number of bytes.
-   * @param si True to use metric (SI) units, aka powers of 1000. False to use
-   *           binary (IEC), aka powers of 1024.
-   * @param dp Number of decimal places to display.
-   *
-   * @return Formatted string.
-   */
-  humanFileSize(bytes: number, si=true, dp=1) {
-    const thresh = si ? 1000 : 1024;
-
-    if (Math.abs(bytes) < thresh) {
-      return bytes + ' B';
-    }
-
-    const units = si
-      ? ['kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
-      : ['KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
-    let u = -1;
-    const r = 10**dp;
-
-    do {
-      bytes /= thresh;
-      ++u;
-    } while (Math.round(Math.abs(bytes) * r) / r >= thresh && u < units.length - 1);
-
-
-    return bytes.toFixed(dp) + ' ' + units[u];
-  }
+  reloadRecentVideos(is_playlist = false): void { this.postsService.files_changed.next(true); if (is_playlist) this.postsService.playlists_changed.next(true); }
 }
-

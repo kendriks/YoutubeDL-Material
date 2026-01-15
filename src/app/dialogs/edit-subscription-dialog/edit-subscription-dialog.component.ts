@@ -1,7 +1,12 @@
-import { Component, OnInit, Inject, ChangeDetectorRef } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
-import { PostsService } from 'app/posts.services';
-import { ArgModifierDialogComponent } from '../arg-modifier-dialog/arg-modifier-dialog.component';
+import { Component, OnInit, Inject } from '@angular/core';
+import { MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { SubscriptionQualityService, QualityOption } from 'app/services/subscription-quality.service';
+import { SubscriptionManagementService, Subscription, TimerangeInfo } from 'app/services/subscription-management.service';
+import { SubscriptionDialogService } from 'app/services/subscription-dialog.service';
+
+export interface DialogData {
+  sub: Subscription;
+}
 
 @Component({
   selector: 'app-edit-subscription-dialog',
@@ -9,151 +14,106 @@ import { ArgModifierDialogComponent } from '../arg-modifier-dialog/arg-modifier-
   styleUrls: ['./edit-subscription-dialog.component.scss']
 })
 export class EditSubscriptionDialogComponent implements OnInit {
-
   updating = false;
-
-  sub = null;
-  new_sub = null;
-
   editor_initialized = false;
 
+  sub: Subscription;
+  new_sub: Subscription;
+
   timerange_amount: number;
-  timerange_unit = 'days';
-  audioOnlyMode = null;
-  download_all = null;
+  timerange_unit: string;
+  audioOnlyMode: boolean;
+  download_all: boolean;
 
-  available_qualities = [
-    {
-      'label': 'Best',
-      'value': 'best'
-    },
-    {
-      'label': '4K',
-      'value': '2160'
-    },
-    {
-      'label': '1440p',
-      'value': '1440'
-    },
-    {
-      'label': '1080p',
-      'value': '1080'
-    },
-    {
-      'label': '720p',
-      'value': '720'
-    },
-    {
-      'label': '480p',
-      'value': '480'
-    },
-    {
-      'label': '360p',
-      'value': '360'
-    }
-  ];
+  available_qualities: QualityOption[];
+  time_units: string[];
 
-  time_units = [
-    'day',
-    'week',
-    'month',
-    'year'
-  ];
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: DialogData,
+    private qualityService: SubscriptionQualityService,
+    private subManagementService: SubscriptionManagementService,
+    private subDialogService: SubscriptionDialogService
+  ) {
+    this.available_qualities = this.qualityService.getAvailableQualities();
+    this.time_units = this.qualityService.getTimeUnits();
+    
+    this.initializeSubscription();
+  }
 
-  constructor(@Inject(MAT_DIALOG_DATA) public data: any, private dialog: MatDialog, private postsService: PostsService) {
-    this.sub = JSON.parse(JSON.stringify(this.data.sub));
-    this.new_sub = JSON.parse(JSON.stringify(this.sub));
+  ngOnInit(): void { }
 
-    // ignore videos to keep requests small
-    delete this.sub['videos'];
-    delete this.new_sub['videos'];
+  private initializeSubscription(): void {
+    this.sub = this.subManagementService.cloneSubscription(this.data.sub);
+    this.new_sub = this.subManagementService.cloneSubscription(this.sub);
 
-    this.audioOnlyMode = this.sub.type === 'audio';
-    this.download_all = !this.sub.timerange;
+    this.subManagementService.removeVideosField(this.sub);
+    this.subManagementService.removeVideosField(this.new_sub);
+
+    this.audioOnlyMode = this.subManagementService.isAudioMode(this.sub);
+    this.download_all = this.subManagementService.shouldDownloadAll(this.sub);
 
     if (this.sub.timerange) {
-      const timerange_str = this.sub.timerange.split('-')[1];
-      const number = timerange_str.replace(/\D/g,'');
-      let units = timerange_str.replace(/[0-9]/g, '');
-
-      if (+number === 1) {
-        units = units.replace('s', '');
-      }
-
-      this.timerange_amount = parseInt(number);
-      this.timerange_unit = units;
-      this.editor_initialized = true;
-    } else {
-      this.editor_initialized = true
+      const timerangeInfo = this.subManagementService.parseTimerange(this.sub.timerange);
+      this.timerange_amount = timerangeInfo.amount;
+      this.timerange_unit = timerangeInfo.unit;
     }
+    
+    this.editor_initialized = true;
   }
 
-  ngOnInit(): void {
-  }
-
-  downloadAllToggled() {
+  downloadAllToggled(): void {
     if (this.download_all) {
       this.new_sub.timerange = null;
     } else {
-      console.log('checking');
       this.timerangeChanged(null, null);
     }
   }
 
-  saveSubscription() {
-    this.postsService.updateSubscription(this.new_sub).subscribe(res => {
-      this.sub = this.new_sub;
-      this.new_sub = JSON.parse(JSON.stringify(this.sub));
-      this.postsService.reloadSubscriptions();
-    })
+  saveSubscription(): void {
+    this.updating = true;
+    this.subManagementService.updateSubscription(this.new_sub).subscribe(
+      () => this.handleSaveSuccess(),
+      err => this.handleSaveError(err)
+    );
   }
 
-  getSubscription() {
-    this.postsService.getSubscription(this.sub.id).subscribe(res => {
-      this.sub = res['subscription'];
-      this.new_sub = JSON.parse(JSON.stringify(this.sub));
+  private handleSaveSuccess(): void {
+    this.updating = false;
+    this.sub = this.subManagementService.cloneSubscription(this.new_sub);
+  }
+
+  private handleSaveError(err: unknown): void {
+    this.updating = false;
+    console.error(err);
+  }
+
+  getSubscription(): void {
+    this.subManagementService.fetchSubscription(this.sub.id).subscribe(res => {
+      this.sub = res.subscription;
+      this.new_sub = this.subManagementService.cloneSubscription(this.sub);
     });
   }
 
-  timerangeChanged(value, select_changed) {
-    if (+this.timerange_amount === 1) {
-      this.timerange_unit = this.timerange_unit.replace('s', '');
-    } else {
-      if (!this.timerange_unit.includes('s')) {
-        this.timerange_unit += 's';
-      }
-    }
-
-    if (this.timerange_amount && this.timerange_unit && !this.download_all) {
-      this.new_sub.timerange = 'now-' + this.timerange_amount.toString() + this.timerange_unit;
-    } else {
-      this.new_sub.timerange = null;
-    }
+  timerangeChanged(value: null, select_changed: null): void {
+    this.timerange_unit = this.subManagementService.normalizeTimerangeUnit(this.timerange_amount, this.timerange_unit);
+    this.subManagementService.updateTimerange(this.new_sub, this.timerange_amount, this.timerange_unit, this.download_all);
   }
 
-  saveClicked() {
+  handleTimerangeChange(event: {amount: number, unit: string}): void {
+    this.timerange_amount = event.amount;
+    this.timerange_unit = event.unit;
+    this.timerangeChanged(null, null);
+  }
+
+  saveClicked(): void {
     this.saveSubscription();
   }
 
-  // modify custom args
-  openArgsModifierDialog() {
-    if (!this.new_sub.custom_args) {
-      this.new_sub.custom_args = '';
-    }
-    const dialogRef = this.dialog.open(ArgModifierDialogComponent, {
-      data: {
-       initial_args: this.new_sub.custom_args
-      }
-    });
-    dialogRef.afterClosed().subscribe(new_args => {
-      if (new_args !== null && new_args !== undefined) {
-        this.new_sub.custom_args = new_args;
-      }
-    });
+  async openArgsModifierDialog(): Promise<void> {
+    await this.subDialogService.updateCustomArgs(this.new_sub);
   }
 
-  subChanged() {
-    return JSON.stringify(this.new_sub) !== JSON.stringify(this.sub);
+  subChanged(): boolean {
+    return !this.subManagementService.subscriptionsAreEqual(this.new_sub, this.sub);
   }
-
 }

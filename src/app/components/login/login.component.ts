@@ -2,6 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { PostsService } from 'app/posts.services';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
+import { AuthService } from 'app/services/auth.service';
+import { FormValidationService } from 'app/services/form-validation.service';
+import { ErrorHandlerService } from 'app/services/error-handler.service';
 
 @Component({
   selector: 'app-login',
@@ -24,11 +27,18 @@ export class LoginComponent implements OnInit {
   registrationPasswordConfirmationInput = '';
   registering = false;
 
-  constructor(private postsService: PostsService, private snackBar: MatSnackBar, private router: Router) { }
-
-  ngOnInit(): void {
-    if (this.postsService.isLoggedIn && localStorage.getItem('jwt_token') !== 'null') {
+  constructor(
+    private postsService: PostsService,
+    private snackBar: MatSnackBar,
+    private rauthService.isLoggedIn()) {
       this.router.navigate(['/home']);
+    }
+    this.postsService.service_initialized.subscribe(init => {
+      if (init) {
+        if (!this.authService.isMultiUserMode()) {
+          this.router.navigate(['/home']);
+        }
+        this.registrationEnabled = this.authService.isRegistrationEnabled()
     }
     this.postsService.service_initialized.subscribe(init => {
       if (init) {
@@ -41,27 +51,23 @@ export class LoginComponent implements OnInit {
   }
 
   login() {
-    if (this.loginPasswordInput === '') {
+    const validation = this.formValidationService.validateLogin(this.loginPasswordInput);
+    if (!validation.valid) {
       return;
     }
+
     this.loggingIn = true;
-    this.postsService.login(this.loginUsernameInput, this.loginPasswordInput).subscribe(res => {
+    this.authService.login(this.loginUsernameInput, this.loginPasswordInput).subscribe(res => {
       this.loggingIn = false;
       if (res['token']) {
-        this.postsService.afterLogin(res['user'], res['token'], res['permissions'], res['available_permissions']);
+        this.authService.afterLogin(res['user'], res['token'], res['permissions'], res['available_permissions']);
       } else {
         this.openSnackBar('Login failed, unknown error.');
       }
     }, err => {
       this.loggingIn = false;
-      const error_code = err.status;
-      if (error_code === 401) {
-        this.openSnackBar('User name or password is incorrect!');
-      } else if (error_code === 404) {
-        this.openSnackBar('Login failed, cannot connect to the server.');
-      } else {
-        this.openSnackBar('Login failed, unknown error.');
-      }
+      const errorMessage = this.errorHandlerService.getLoginErrorMessage(err.status);
+      this.openSnackBar(errorMessage);
     });
   }
 
@@ -70,24 +76,19 @@ export class LoginComponent implements OnInit {
       this.openSnackBar('User name is required!');
       return;
     }
+const validation = this.formValidationService.validateRegistration(
+      this.registrationUsernameInput,
+      this.registrationPasswordInput,
+      this.registrationPasswordConfirmationInput
+    );
 
-    if (!this.registrationPasswordInput || this.registrationPasswordInput === '') {
-      this.openSnackBar('Password is required!');
-      return;
-    }
-
-    if (!this.registrationPasswordConfirmationInput || this.registrationPasswordConfirmationInput === '') {
-      this.openSnackBar('Password confirmation is required!');
-      return;
-    }
-
-    if (this.registrationPasswordInput !== this.registrationPasswordConfirmationInput) {
-      this.openSnackBar('Password confirmation is incorrect!');
+    if (!validation.valid) {
+      this.openSnackBar(validation.error);
       return;
     }
 
     this.registering = true;
-    this.postsService.register(this.registrationUsernameInput, this.registrationPasswordInput).subscribe(res => {
+    this.authService.register(this.registrationUsernameInput, this.registrationPasswordInput).subscribe(res => {
       this.registering = false;
       if (res && res['user']) {
         this.openSnackBar(`User ${res['user']['name']} successfully registered.`);
@@ -98,13 +99,9 @@ export class LoginComponent implements OnInit {
       }
     }, err => {
       this.registering = false;
-      if (err && err.error && typeof err.error === 'string') {
-        this.openSnackBar(err.error);
-      } else {
-        console.log(err);
-      }
-    });
-  }
+      const errorMessage = this.errorHandlerService.getRegistrationErrorMessage(err);
+      this.openSnackBar(errorMessage);
+      if (!err.error || typeof err.error !== 'string')
 
   public openSnackBar(message: string, action: string = '') {
     this.snackBar.open(message, action, {

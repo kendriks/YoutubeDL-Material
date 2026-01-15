@@ -1,0 +1,24 @@
+<div class="sidenav-container" style="height: calc(100% - 64px)">
+    <mat-sidenav-container style="height: 100%">
+        <mat-sidenav [opened]="isSidenavOpen() && !window.location.href.includes('/player')" [mode]="getSidenavMode()" #sidenav>
+            <mat-nav-list>
+                <a *ngIf="postsService.config && (!postsService.config.Advanced.multi_user_mode || postsService.isLoggedIn)" mat-list-item (click)="closeSidenav()" routerLink='/home'><ng-container i18n="Navigation menu Home Page title">Home</ng-container></a>
+                <a *ngIf="postsService.config && postsService.config.Advanced.multi_user_mode && !postsService.isLoggedIn" mat-list-item (click)="closeSidenav()" routerLink='/login'><ng-container i18n="Navigation menu Login Page title">Login</ng-container></a>
+                <a *ngIf="postsService.config && allowSubscriptions && postsService.hasPermission('subscriptions')" mat-list-item (click)="closeSidenav()" routerLink='/subscriptions'><ng-container i18n="Navigation menu Subscriptions Page title">Subscriptions</ng-container></a>
+                <a *ngIf="postsService.config && postsService.hasPermission('downloads_manager')" mat-list-item (click)="closeSidenav()" routerLink='/downloads'><ng-container i18n="Navigation menu Downloads Page title">Downloads</ng-container></a>
+                <a *ngIf="postsService.config && postsService.hasPermission('tasks_manager')" mat-list-item (click)="closeSidenav()" routerLink='/tasks'><ng-container i18n="Navigation menu Tasks Page title">Tasks</ng-container></a>
+                <ng-container *ngIf="postsService.config && postsService.hasPermission('settings')">
+                    <mat-divider></mat-divider>
+                    <a mat-list-item (click)="closeSidenav()" routerLink='/settings'><ng-container i18n="Settings menu label">Settings</ng-container></a>
+                </ng-container>
+                <ng-container *ngIf="postsService.config && allowSubscriptions && postsService.subscriptions && postsService.hasPermission('subscriptions')">
+                    <mat-divider *ngIf="postsService.subscriptions.length > 0"></mat-divider>
+                    <a *ngFor="let subscription of postsService.subscriptions" mat-list-item (click)="closeSidenav()" [routerLink]="['/subscription', { id: subscription.id }]"><ngx-avatars [style.display]="'inline-block'" [style.margin-right]="'10px'" size="32" [name]="subscription.name"></ngx-avatars>{{subscription.name}}</a>
+                </ng-container>
+            </mat-nav-list>
+        </mat-sidenav>
+        <mat-sidenav-content [style.background]="postsService.theme ? postsService.theme.background_color : null">
+            <router-outlet></router-outlet>
+        </mat-sidenav-content>
+    </mat-sidenav-container>
+</div>

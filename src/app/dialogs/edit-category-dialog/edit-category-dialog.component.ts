@@ -1,6 +1,7 @@
 import { Component, OnInit, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';
-import { PostsService } from 'app/posts.services';
+import { CategoryPropertyService, PropertyOption } from 'app/services/category-property.service';
+import { CategoryManagementService, Category } from 'app/services/category-management.service';
 
 @Component({
   selector: 'app-edit-category-dialog',
@@ -8,104 +9,59 @@ import { PostsService } from 'app/posts.services';
   styleUrls: ['./edit-category-dialog.component.scss']
 })
 export class EditCategoryDialogComponent implements OnInit {
-
   updating = false;
-  original_category = null;
-  category = null;
+  original_category: Category;
+  category: Category;
+  propertyOptions: PropertyOption[];
+  comparatorOptions: PropertyOption[];
 
-  propertyOptions = [
-    {
-      value: 'fulltitle',
-      label: 'Title'
-    },
-    {
-      value: 'id',
-      label: 'ID'
-    },
-    {
-      value: 'webpage_url',
-      label: 'URL'
-    },
-    {
-      value: 'view_count',
-      label: 'Views'
-    },
-    {
-      value: 'uploader',
-      label: 'Uploader'
-    },
-    {
-      value: '_filename',
-      label: 'File Name'
-    },
-    {
-      value: 'tags',
-      label: 'Tags'
-    }
-  ];
-
-  comparatorOptions = [
-    {
-      value: 'includes',
-      label: 'includes'
-    },
-    {
-      value: 'not_includes',
-      label: 'not includes'
-    },
-    {
-      value: 'equals',
-      label: 'equals'
-    },
-    {
-      value: 'not_equals',
-      label: 'not equals'
-    },
-
-  ];
-
-  constructor(@Inject(MAT_DIALOG_DATA) public data: any, private postsService: PostsService) {
-    if (this.data) {
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: any,
+    private categoryPropertyService: CategoryPropertyService,
+    private categoryManagementService: CategoryManagementService
+  ) {
+    this.propertyOptions = this.categoryPropertyService.getPropertyOptions();
+    this.comparatorOptions = this.categoryPropertyService.getComparatorOptions();
+    
+    if (this.data?.category) {
       this.original_category = this.data.category;
-      this.category = JSON.parse(JSON.stringify(this.original_category));
+      this.category = this.categoryManagementService.cloneCategory(this.original_category);
     }
   }
 
-  ngOnInit(): void {
+  ngOnInit(): void { }
+
+  addNewRule(): void {
+    this.categoryManagementService.addRuleToCategory(this.category);
   }
 
-  addNewRule() {
-    this.category['rules'].push({
-      preceding_operator: 'or',
-      property: 'fulltitle',
-      comparator: 'includes',
-      value: ''
-    });
-  }
-
-  saveClicked() {
+  saveClicked(): void {
     this.updating = true;
-    this.postsService.updateCategory(this.category).subscribe(res => {
-      this.updating = false;
-      this.original_category = JSON.parse(JSON.stringify(this.category));
-      this.postsService.reloadCategories();
-    }, err => {
-      this.updating = false;
-      console.error(err);
-    });
+    this.categoryManagementService.updateCategory(this.category).subscribe(
+      () => this.handleSaveSuccess(),
+      err => this.handleSaveError(err)
+    );
   }
 
-  categoryChanged() {
-    return JSON.stringify(this.category) === JSON.stringify(this.original_category);
+  private handleSaveSuccess(): void {
+    this.updating = false;
+    this.original_category = this.categoryManagementService.cloneCategory(this.category);
   }
 
-  swapRules(original_index, new_index) {
-    [this.category.rules[original_index], this.category.rules[new_index]] = [this.category.rules[new_index],
-                                                                            this.category.rules[original_index]];
+  private handleSaveError(err: unknown): void {
+    this.updating = false;
+    console.error(err);
   }
 
-  removeRule(index) {
-    this.category['rules'].splice(index, 1);
+  categoryChanged(): boolean {
+    return this.categoryManagementService.categoriesAreEqual(this.category, this.original_category);
   }
 
+  swapRules(index1: number, index2: number): void {
+    this.categoryManagementService.swapRules(this.category, index1, index2);
+  }
+
+  removeRule(index: number): void {
+    this.categoryManagementService.removeRuleFromCategory(this.category, index);
+  }
 }
