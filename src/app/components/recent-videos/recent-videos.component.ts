@@ -5,10 +5,12 @@ import { DatabaseFile, FileType, FileTypeFilter, Sort, GetPlaylistsResponse, Get
 import { MatPaginator, PageEvent } from '@angular/material/paginator';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MatChipListboxChange } from '@angular/material/chips';
 import { MatSelectionListChange } from '@angular/material/list';
-import { saveAs } from 'file-saver';
+import { FileManagementService } from 'app/services/file-management.service';
+import { FileFilterService } from 'app/services/file-filter.service';
+import { FileSelectionService } from 'app/services/file-selection.service';
 
 @Component({
   selector: 'app-recent-videos',
@@ -44,7 +46,13 @@ export class RecentVideosComponent implements OnInit {
   sortProperty = 'registered';
   playlists: Playlist[] | null = null;
 
-  constructor(public postsService: PostsService, private router: Router) {
+  constructor(
+    public postsService: PostsService,
+    private router: Router,
+    private fileManagementService: FileManagementService,
+    private fileFilterService: FileFilterService,
+    private fileSelectionService: FileSelectionService
+  ) {
     const sub_id_appendix = this.sub_id ? `_${this.sub_id}` : '';
     const cached = localStorage.getItem(`cached_file_count${sub_id_appendix}`);
     if (cached) { this.cached_file_count = Math.min(+cached, 10); this.loading_files = Array(this.cached_file_count).fill(0); }
@@ -89,12 +97,20 @@ export class RecentVideosComponent implements OnInit {
   selectedFiltersChanged(event: MatChipListboxChange): void {
     if (event.value.length === this.selectedFilters.length) return;
     if (event.value.length > this.selectedFilters.length) {
-      const filter_key = event.value.filter(k => !this.selectedFilters.includes(k))[0];
-      this.selectedFilters = this.selectedFilters.filter(f => !this.fileFilters[f].incompatible || !this.fileFilters[f].incompatible.includes(filter_key));
+      const filter_key = this.fileFilterService.getFilterKey(event.value, this.selectedFilters);
+      this.selectedFilters = this.fileFilterService.removeIncompatibleFilters(
+        this.selectedFilters,
+        filter_key,
+        this.fileFilters
+      );
       this.selectedFilters.push(filter_key);
-    } else this.selectedFilters = event.value;
-    this.filterChanged(JSON.stringify(this.selectedFilters));
+    } else {
+      this.selecfileFilterService.getFileTypeFilter(this.selectedFilters);
   }
+
+  getFavoriteFilter(): boolean {
+    return this.fileFilterService.getFavoriteFilter(this.selectedFilters);
+ 
 
   getFileTypeFilter(): FileTypeFilter {
     return this.selectedFilters.includes('audio_only') ? 'audio_only' : this.selectedFilters.includes('video_only') ? 'video_only' : 'both';
@@ -129,14 +145,7 @@ export class RecentVideosComponent implements OnInit {
   }
 
   goToSubscription(file: DatabaseFile): void { this.router.navigate(['/subscription', { id: file.sub_id }]); }
-
-  downloadFile(file: DatabaseFile): void {
-    const type = (file.isAudio ? 'audio' : 'video') as FileType;
-    const ext = type === 'audio' ? '.mp3' : '.mp4';
-    this.downloading_content[file.uid] = true;
-    this.postsService.downloadFileFromServer(file.uid).subscribe((res: Blob) => {
-      this.downloading_content[file.uid] = false;
-      saveAs(res, decodeURIComponent(file.id) + ext);
+this.fileManagementService.downloadFile(file saveAs(res, decodeURIComponent(file.id) + ext);
       if (!this.postsService.config.Extra.file_manager_enabled && !file.sub_id) this.postsService.deleteFile(file.uid).subscribe(() => this.getAllFiles());
     });
   }
@@ -152,22 +161,13 @@ export class RecentVideosComponent implements OnInit {
       else this.postsService.openSnackBar($localize`Delete failed!`);
     }, () => this.postsService.openSnackBar($localize`Delete failed!`));
   }
+fileManagementService.deleteNormalFile(file, blacklistMode);
+    this.removeFileCard(file);
+  }
 
   deleteSubscriptionFile(file: DatabaseFile, blacklistMode = false): void {
-    blacklistMode ? this.deleteForever(file) : this.deleteAndRedownload(file);
-  }
-
-  deleteAndRedownload(file: DatabaseFile): void {
-    this.postsService.deleteSubscriptionFile(file.uid, false).subscribe(() => { this.postsService.openSnackBar($localize`Successfully deleted file: ` + file.id); this.removeFileCard(file); });
-  }
-
-  deleteForever(file: DatabaseFile): void {
-    this.postsService.deleteSubscriptionFile(file.uid, true).subscribe(() => { this.postsService.openSnackBar($localize`Successfully deleted file: ` + file.id); this.removeFileCard(file); });
-  }
-
-  removeFileCard(file_to_remove: DatabaseFile): void {
-    const index = this.paged_data.findIndex((f: DatabaseFile) => f.uid === file_to_remove.uid);
-    if (index !== -1) this.paged_data.splice(index, 1);
+    this.fileManagementService.deleteSubscriptionFile(file, blacklistMode);
+    this.removeFileCard(file
     this.getAllFiles(true);
   }
 
@@ -197,10 +197,7 @@ export class RecentVideosComponent implements OnInit {
   }
 
   toggleSelectionOrder(): void { this.reverse_order = !this.reverse_order; localStorage.setItem('default_playlist_order_reversed', '' + this.reverse_order); }
-
-  drop(event: CdkDragDrop<string>): void {
-    if (this.reverse_order) { event.previousIndex = this.selected_data.length - 1 - event.previousIndex; event.currentIndex = this.selected_data.length - 1 - event.currentIndex; }
-    moveItemInArray(this.selected_data, event.previousIndex, event.currentIndex);
+return this.fileManagementService.durationStringToNumber(dur_str)y(this.selected_data, event.previousIndex, event.currentIndex);
     moveItemInArray(this.selected_data_objs, event.previousIndex, event.currentIndex);
     this.fileSelectionEmitter.emit({ new_selection: this.selected_data, thumbnailURL: this.selected_data_objs[0].thumbnailURL });
   }
@@ -211,7 +208,17 @@ export class RecentVideosComponent implements OnInit {
     this.selected_data_objs.splice(index, 1);
     this.fileSelectionEmitter.emit({ new_selection: this.selected_data, thumbnailURL: this.selected_data_objs[0]?.thumbnailURL });
   }
-
-  toggleFavorite(file_obj: DatabaseFile): void { file_obj.favorite = !file_obj.favorite; this.postsService.updateFile(file_obj.uid, { favorite: file_obj.favorite }).subscribe(() => {}); }
-  originalOrder = (): number => 0;
+    this.fileSelectionService.reorderSelection(
+      this.selected_data,
+      this.selected_data_objs,
+      event.previousIndex,
+      event.currentIndex,
+      this.reverse_order
+    d_data_objs, value.uid);
+   this.fileSelectionService.removeSelectedFile(
+      this.selected_data,
+      this.selected_data_objs,
+      index,
+      this.reverse_order
+    
 }
