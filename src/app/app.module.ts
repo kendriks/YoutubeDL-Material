@@ -97,6 +97,11 @@ import { SortPropertyComponent } from './components/sort-property/sort-property.
 import { OnlyNumberDirective } from './directives/only-number.directive';
 import { ArchiveViewerComponent } from './components/archive-viewer/archive-viewer.component';
 import { SubscriptionListComponent } from './components/subscription-list/subscription-list.component';
+import { SubscriptionHeaderComponent } from './components/subscription-header/subscription-header.component';
+import { SubscriptionActionsComponent } from './components/subscription-actions/subscription-actions.component';
+import { SubscriptionStateService } from './services/subscription-state.service';
+import { SubscriptionActionsService } from './services/subscription-actions.service';
+import { SubscriptionUiService } from './services/subscription-ui.service';
 
 registerLocaleData(es, 'es');
 
@@ -150,7 +155,9 @@ registerLocaleData(es, 'es');
         SortPropertyComponent,
         OnlyNumberDirective,
         ArchiveViewerComponent,
-        SubscriptionListComponent
+        SubscriptionListComponent,
+        SubscriptionHeaderComponent,
+        SubscriptionActionsComponent
     ],
     imports: [
         CommonModule,
@@ -206,7 +213,10 @@ registerLocaleData(es, 'es');
     providers: [
         PostsService,
         { provide: HTTP_INTERCEPTORS, useClass: H401Interceptor, multi: true },
-        DatePipe
+        DatePipe,
+        SubscriptionStateService,
+        SubscriptionActionsService,
+        SubscriptionUiService
     ],
     exports: [
         HighlightPipe,
