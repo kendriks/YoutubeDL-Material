@@ -99,9 +99,13 @@ import { ArchiveViewerComponent } from './components/archive-viewer/archive-view
 import { SubscriptionListComponent } from './components/subscription-list/subscription-list.component';
 import { SubscriptionHeaderComponent } from './components/subscription-header/subscription-header.component';
 import { SubscriptionActionsComponent } from './components/subscription-actions/subscription-actions.component';
+import { VideoInfoFieldsComponent } from './components/video-info-fields/video-info-fields.component';
+import { VideoInfoDisplayComponent } from './components/video-info-display/video-info-display.component';
 import { SubscriptionStateService } from './services/subscription-state.service';
 import { SubscriptionActionsService } from './services/subscription-actions.service';
 import { SubscriptionUiService } from './services/subscription-ui.service';
+import { VideoInfoDataService } from './services/video-info-data.service';
+import { VideoInfoStateService } from './services/video-info-state.service';
 
 registerLocaleData(es, 'es');
 
@@ -155,7 +159,9 @@ registerLocaleData(es, 'es');
         SortPropertyComponent,
         OnlyNumberDirective,
         ArchiveViewerComponent,
-        SubscriptionListComponent,
+        SubscriptionListComponent,,
+        VideoInfoFieldsComponent,
+        VideoInfoDisplayComponent
         SubscriptionHeaderComponent,
         SubscriptionActionsComponent
     ],
@@ -216,7 +222,9 @@ registerLocaleData(es, 'es');
         DatePipe,
         SubscriptionStateService,
         SubscriptionActionsService,
-        SubscriptionUiService
+        SubscriptionUiService,
+        VideoInfoDataService,
+        VideoInfoStateService
     ],
     exports: [
         HighlightPipe,
