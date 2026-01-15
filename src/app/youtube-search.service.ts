@@ -2,15 +2,24 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface ResultData {
+  id?: string;
+  title?: string;
+  desc?: string;
+  thumbnailUrl?: string;
+  uploaded?: string;
+  videoUrl?: string;
+}
+
 export class Result {
   id: string
   title: string
   desc: string
   thumbnailUrl: string
   videoUrl: string
-  uploaded: any;
+  uploaded: string | null;
 
-  constructor(obj?: any) {
+  constructor(obj?: ResultData) {
     this.id           = obj && obj.id           || null
     this.title        = obj && obj.title        || null
     this.desc         = obj && obj.desc         || null
@@ -50,7 +59,8 @@ export class YoutubeSearchService {
     ].join('&')
     const queryUrl = `${this.url}?${params}`
     return this.http.get(queryUrl).map(response => {
-      return <any>response['items'].map(item => {
+      const items = (response as { items: unknown[] })['items'];
+      return items.map(item => {
         return new Result({
           id: item.id.videoId,
           title: item.snippet.title,
@@ -77,7 +87,7 @@ function formatDate(dateVal) {
   const sMonth = padValue(newDate.getMonth() + 1);
   const sDay = padValue(newDate.getDate());
   const sYear = newDate.getFullYear();
-  let sHour: any;
+  let sHour: string | number;
   sHour = newDate.getHours();
   const sMinute = padValue(newDate.getMinutes());
   let sAMPM = 'AM';
