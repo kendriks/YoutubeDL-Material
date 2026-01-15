@@ -41,196 +41,84 @@ import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { PostsService } from 'app/posts.services';
 import { RouterModule } from '@angular/router';
 import { AppRoutingModule } from './app-routing.module';
-import { MainComponent } from './main/main.component';
-import { PlayerComponent } from './player/player.component';
 import { VgControlsModule } from '@videogular/ngx-videogular/controls';
 import { VgBufferingModule } from '@videogular/ngx-videogular/buffering';
 import { VgOverlayPlayModule } from '@videogular/ngx-videogular/overlay-play';
 import { VgCoreModule } from '@videogular/ngx-videogular/core';
-import { InputDialogComponent } from './input-dialog/input-dialog.component';
-import { CreatePlaylistComponent } from './create-playlist/create-playlist.component';
-import { SubscriptionsComponent } from './subscriptions/subscriptions.component';
-import { SubscribeDialogComponent } from './dialogs/subscribe-dialog/subscribe-dialog.component';
-import { SubscriptionComponent } from './subscription//subscription/subscription.component';
-import { SubscriptionInfoDialogComponent } from './dialogs/subscription-info-dialog/subscription-info-dialog.component';
-import { SettingsComponent } from './settings/settings.component';
 import { NgxFileDropModule } from 'ngx-file-drop';
 import { AvatarModule } from 'ngx-avatars';
 import { ContentLoaderModule } from '@ngneat/content-loader';
+import { H401Interceptor } from './http.interceptor';
 
 import es from '@angular/common/locales/es';
-import { AboutDialogComponent } from './dialogs/about-dialog/about-dialog.component';
-import { VideoInfoDialogComponent } from './dialogs/video-info-dialog/video-info-dialog.component';
-import { ArgModifierDialogComponent, HighlightPipe } from './dialogs/arg-modifier-dialog/arg-modifier-dialog.component';
-import { UpdaterComponent } from './updater/updater.component';
-import { UpdateProgressDialogComponent } from './dialogs/update-progress-dialog/update-progress-dialog.component';
-import { ShareMediaDialogComponent } from './dialogs/share-media-dialog/share-media-dialog.component';
-import { LoginComponent } from './components/login/login.component';
-import { DownloadsComponent } from './components/downloads/downloads.component';
-import { UserProfileDialogComponent } from './dialogs/user-profile-dialog/user-profile-dialog.component';
-import { SetDefaultAdminDialogComponent } from './dialogs/set-default-admin-dialog/set-default-admin-dialog.component';
-import { ModifyUsersComponent } from './components/modify-users/modify-users.component';
-import { AddUserDialogComponent } from './dialogs/add-user-dialog/add-user-dialog.component';
-import { ManageUserComponent } from './components/manage-user/manage-user.component';
-import { ManageRoleComponent } from './components/manage-role/manage-role.component';
-import { CookiesUploaderDialogComponent } from './dialogs/cookies-uploader-dialog/cookies-uploader-dialog.component';
-import { LogsViewerComponent } from './components/logs-viewer/logs-viewer.component';
-import { ConfirmDialogComponent } from './dialogs/confirm-dialog/confirm-dialog.component';
-import { UnifiedFileCardComponent } from './components/unified-file-card/unified-file-card.component';
-import { RecentVideosComponent } from './components/recent-videos/recent-videos.component';
-import { EditSubscriptionDialogComponent } from './dialogs/edit-subscription-dialog/edit-subscription-dialog.component';
-import { CustomPlaylistsComponent } from './components/custom-playlists/custom-playlists.component';
-import { EditCategoryDialogComponent } from './dialogs/edit-category-dialog/edit-category-dialog.component';
-import { TwitchChatComponent } from './components/twitch-chat/twitch-chat.component';
-import { LinkifyPipe, SeeMoreComponent } from './components/see-more/see-more.component';
-import { H401Interceptor } from './http.interceptor';
-import { ConcurrentStreamComponent } from './components/concurrent-stream/concurrent-stream.component';
-import { SkipAdButtonComponent } from './components/skip-ad-button/skip-ad-button.component';
-import { TasksComponent } from './components/tasks/tasks.component';
-import { UpdateTaskScheduleDialogComponent } from './dialogs/update-task-schedule-dialog/update-task-schedule-dialog.component';
-import { RestoreDbDialogComponent } from './dialogs/restore-db-dialog/restore-db-dialog.component';
-import { NotificationsComponent } from './components/notifications/notifications.component';
-import { NotificationsListComponent } from './components/notifications-list/notifications-list.component';
-import { TaskSettingsComponent } from './components/task-settings/task-settings.component';
-import { GenerateRssUrlComponent } from './dialogs/generate-rss-url/generate-rss-url.component';
-import { SortPropertyComponent } from './components/sort-property/sort-property.component';
-import { OnlyNumberDirective } from './directives/only-number.directive';
-import { ArchiveViewerComponent } from './components/archive-viewer/archive-viewer.component';
-import { SubscriptionListComponent } from './components/subscription-list/subscription-list.component';
-import { SubscriptionHeaderComponent } from './components/subscription-header/subscription-header.component';
-import { SubscriptionActionsComponent } from './components/subscription-actions/subscription-actions.component';
-import { VideoInfoFieldsComponent } from './components/video-info-fields/video-info-fields.component';
-import { VideoInfoDisplayComponent } from './components/video-info-display/video-info-display.component';
-import { SubscriptionStateService } from './services/subscription-state.service';
-import { SubscriptionActionsService } from './services/subscription-actions.service';
-import { SubscriptionUiService } from './services/subscription-ui.service';
-import { VideoInfoDataService } from './services/video-info-data.service';
-import { VideoInfoStateService } from './services/video-info-state.service';
+
+import {
+  MainComponent, PlayerComponent, InputDialogComponent, CreatePlaylistComponent,
+  SubscriptionsComponent, SubscribeDialogComponent, SubscriptionComponent,
+  SubscriptionInfoDialogComponent, SettingsComponent, AboutDialogComponent,
+  VideoInfoDialogComponent, ArgModifierDialogComponent, HighlightPipe,
+  UpdaterComponent, UpdateProgressDialogComponent, ShareMediaDialogComponent,
+  LoginComponent, DownloadsComponent, UserProfileDialogComponent,
+  SetDefaultAdminDialogComponent, ModifyUsersComponent, AddUserDialogComponent,
+  ManageUserComponent, ManageRoleComponent, CookiesUploaderDialogComponent,
+  LogsViewerComponent, ConfirmDialogComponent, UnifiedFileCardComponent,
+  RecentVideosComponent, EditSubscriptionDialogComponent, CustomPlaylistsComponent,
+  EditCategoryDialogComponent, TwitchChatComponent, LinkifyPipe, SeeMoreComponent,
+  ConcurrentStreamComponent, SkipAdButtonComponent, TasksComponent,
+  UpdateTaskScheduleDialogComponent, RestoreDbDialogComponent, NotificationsComponent,
+  NotificationsListComponent, TaskSettingsComponent, GenerateRssUrlComponent,
+  SortPropertyComponent, OnlyNumberDirective, ArchiveViewerComponent,
+  SubscriptionListComponent, SubscriptionHeaderComponent, SubscriptionActionsComponent,
+  VideoInfoFieldsComponent, VideoInfoDisplayComponent, SubscribeBasicFormComponent,
+  SubscribeAdvancedFormComponent
+} from './declarations';
+
+import {
+  SubscriptionStateService, SubscriptionActionsService, SubscriptionUiService,
+  VideoInfoDataService, VideoInfoStateService, SubscribeDataService, SubscribeFormService
+} from './service-exports';
 
 registerLocaleData(es, 'es');
 
 @NgModule({
     declarations: [
-        AppComponent,
-        MainComponent,
-        PlayerComponent,
-        InputDialogComponent,
-        CreatePlaylistComponent,
-        SubscriptionsComponent,
-        SubscribeDialogComponent,
-        SubscriptionComponent,
-        SubscriptionInfoDialogComponent,
-        SettingsComponent,
-        AboutDialogComponent,
-        VideoInfoDialogComponent,
-        ArgModifierDialogComponent,
-        HighlightPipe,
-        LinkifyPipe,
-        UpdaterComponent,
-        UpdateProgressDialogComponent,
-        ShareMediaDialogComponent,
-        LoginComponent,
-        DownloadsComponent,
-        UserProfileDialogComponent,
-        SetDefaultAdminDialogComponent,
-        ModifyUsersComponent,
-        AddUserDialogComponent,
-        ManageUserComponent,
-        ManageRoleComponent,
-        CookiesUploaderDialogComponent,
-        LogsViewerComponent,
-        ConfirmDialogComponent,
-        UnifiedFileCardComponent,
-        RecentVideosComponent,
-        EditSubscriptionDialogComponent,
-        CustomPlaylistsComponent,
-        EditCategoryDialogComponent,
-        TwitchChatComponent,
-        SeeMoreComponent,
-        ConcurrentStreamComponent,
-        SkipAdButtonComponent,
-        TasksComponent,
-        UpdateTaskScheduleDialogComponent,
-        RestoreDbDialogComponent,
-        NotificationsComponent,
-        NotificationsListComponent,
-        TaskSettingsComponent,
-        GenerateRssUrlComponent,
-        SortPropertyComponent,
-        OnlyNumberDirective,
-        ArchiveViewerComponent,
-        SubscriptionListComponent,,
-        VideoInfoFieldsComponent,
-        VideoInfoDisplayComponent
-        SubscriptionHeaderComponent,
+        AppComponent, MainComponent, PlayerComponent, InputDialogComponent,
+        CreatePlaylistComponent, SubscriptionsComponent, SubscribeDialogComponent,
+        SubscriptionComponent, SubscriptionInfoDialogComponent, SettingsComponent,
+        AboutDialogComponent, VideoInfoDialogComponent, ArgModifierDialogComponent,
+        HighlightPipe, LinkifyPipe, UpdaterComponent, UpdateProgressDialogComponent,
+        ShareMediaDialogComponent, LoginComponent, DownloadsComponent,
+        UserProfileDialogComponent, SetDefaultAdminDialogComponent, ModifyUsersComponent,
+        AddUserDialogComponent, ManageUserComponent, ManageRoleComponent,
+        CookiesUploaderDialogComponent, LogsViewerComponent, ConfirmDialogComponent,
+        UnifiedFileCardComponent, RecentVideosComponent, EditSubscriptionDialogComponent,
+        CustomPlaylistsComponent, EditCategoryDialogComponent, TwitchChatComponent,
+        SeeMoreComponent, ConcurrentStreamComponent, SkipAdButtonComponent, TasksComponent,
+        UpdateTaskScheduleDialogComponent, RestoreDbDialogComponent, NotificationsComponent,
+        NotificationsListComponent, TaskSettingsComponent, GenerateRssUrlComponent,
+        SortPropertyComponent, OnlyNumberDirective, ArchiveViewerComponent,
+        SubscriptionListComponent, VideoInfoFieldsComponent, VideoInfoDisplayComponent,
+        SubscribeBasicFormComponent, SubscribeAdvancedFormComponent, SubscriptionHeaderComponent,
         SubscriptionActionsComponent
     ],
     imports: [
-        CommonModule,
-        BrowserModule,
-        BrowserAnimationsModule,
-        MatNativeDateModule,
-        MatRadioModule,
-        FormsModule,
-        MatInputModule,
-        MatSelectModule,
-        ReactiveFormsModule,
-        HttpClientModule,
-        MatToolbarModule,
-        MatCardModule,
-        MatSnackBarModule,
-        MatButtonModule,
-        MatCheckboxModule,
-        MatSidenavModule,
-        MatIconModule,
-        MatListModule,
-        MatGridListModule,
-        MatExpansionModule,
-        MatProgressBarModule,
-        MatProgressSpinnerModule,
-        MatButtonToggleModule,
-        MatRippleModule,
-        MatMenuModule,
-        MatDialogModule,
-        MatSlideToggleModule,
-        MatAutocompleteModule,
-        MatTabsModule,
-        MatTooltipModule,
-        MatPaginatorModule,
-        MatSortModule,
-        MatTableModule,
-        MatDatepickerModule,
-        MatChipsModule,
-        MatBadgeModule,
-        DragDropModule,
-        ClipboardModule,
-        TextFieldModule,
-        ScrollingModule,
-        NgxFileDropModule,
-        AvatarModule,
-        ContentLoaderModule,
-        VgCoreModule,
-        VgControlsModule,
-        VgOverlayPlayModule,
-        VgBufferingModule,
-        RouterModule,
-        AppRoutingModule,
+        CommonModule, BrowserModule, BrowserAnimationsModule, MatNativeDateModule, MatRadioModule,
+        FormsModule, MatInputModule, MatSelectModule, ReactiveFormsModule, HttpClientModule,
+        MatToolbarModule, MatCardModule, MatSnackBarModule, MatButtonModule, MatCheckboxModule,
+        MatSidenavModule, MatIconModule, MatListModule, MatGridListModule, MatExpansionModule,
+        MatProgressBarModule, MatProgressSpinnerModule, MatButtonToggleModule, MatRippleModule,
+        MatMenuModule, MatDialogModule, MatSlideToggleModule, MatAutocompleteModule, MatTabsModule,
+        MatTooltipModule, MatPaginatorModule, MatSortModule, MatTableModule, MatDatepickerModule,
+        MatChipsModule, MatBadgeModule, DragDropModule, ClipboardModule, TextFieldModule,
+        ScrollingModule, NgxFileDropModule, AvatarModule, ContentLoaderModule, VgCoreModule,
+        VgControlsModule, VgOverlayPlayModule, VgBufferingModule, RouterModule, AppRoutingModule
     ],
     providers: [
-        PostsService,
-        { provide: HTTP_INTERCEPTORS, useClass: H401Interceptor, multi: true },
-        DatePipe,
-        SubscriptionStateService,
-        SubscriptionActionsService,
-        SubscriptionUiService,
-        VideoInfoDataService,
-        VideoInfoStateService
+        PostsService, { provide: HTTP_INTERCEPTORS, useClass: H401Interceptor, multi: true },
+        DatePipe, SubscriptionStateService, SubscriptionActionsService, SubscriptionUiService,
+        VideoInfoDataService, VideoInfoStateService, SubscribeDataService, SubscribeFormService
     ],
-    exports: [
-        HighlightPipe,
-        LinkifyPipe
-    ],
+    exports: [ HighlightPipe, LinkifyPipe ],
     bootstrap: [AppComponent]
 })
-
 export class AppModule { }
